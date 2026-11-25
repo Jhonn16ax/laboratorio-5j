@@ -112,15 +112,26 @@
 const canvas=document.getElementById('game'),ctx=canvas.getContext('2d'),$=id=>document.getElementById(id),keys={};
 const ARENA_WIDTH=1200,FLOOR=408,MAX_HP=120,STORE_KEY='robotArenaAI.learning.v2';
 const PLATFORMS=[
- {x:220,y:350,w:145,h:18,label:'GRADA 1'},
- {x:370,y:310,w:145,h:18,label:'GRADA 2'},
- {x:520,y:270,w:175,h:18,label:'PLATAFORMA ALTA'},
- {x:700,y:310,w:145,h:18,label:'GRADA 2'},
- {x:850,y:350,w:170,h:18,label:'GRADA 1'}
+ {id:'stepL1',x:220,y:350,w:145,h:18,label:'GRADA 1'},
+ {id:'stepL2',x:370,y:310,w:145,h:18,label:'GRADA 2'},
+ {id:'upper',x:520,y:270,w:175,h:18,label:'PLATAFORMA ALTA'},
+ {id:'stepR2',x:700,y:310,w:145,h:18,label:'GRADA 2'},
+ {id:'stepR1',x:850,y:350,w:170,h:18,label:'GRADA 1'},
+ {id:'bridgeL',x:340,y:220,w:150,h:16,label:'PUENTE ALTO',bridge:true},
+ {id:'bridgeR',x:730,y:220,w:150,h:16,label:'PUENTE ALTO',bridge:true},
+ {id:'lift',x:520,baseX:520,y:180,w:155,h:16,label:'PLATAFORMA MÓVIL',moving:true,range:78,speed:.8,phase:0,dx:0}
 ];
+const SPRINGS=[{x:65,w:78,label:'IMPULSO'},{x:1080,w:78,label:'IMPULSO'}];
+const HAZARDS=[{x:430,w:105,label:'ZONA ELÉCTRICA'},{x:910,w:112,label:'ZONA ELÉCTRICA'}];
+const CRATE_START=[
+ {id:'boxA',x:455,y:FLOOR-46,w:42,h:46,hp:4,maxHp:4},
+ {id:'boxB',x:775,y:310-43,w:42,h:43,hp:4,maxHp:4},
+ {id:'boxC',x:590,y:270-40,w:40,h:40,hp:3,maxHp:3}
+];
+let crates=CRATE_START.map(q=>({...q})),arenaClock=0;
 let running=false,paused=false,finished=false,lastTime=0,aiClock=0,roundTime=90,projectiles=[],particles=[],session=null,shotCooldown=0,playerMeleeCooldown=0,enemyShotCooldown=0,enemyMeleeCooldown=0;
-const player={x:145,y:FLOOR-78,w:58,h:78,hp:MAX_HP,en:100,vx:0,vy:0,face:1,ground:true,def:false,flash:0,attack:0};
-const enemy={x:990,y:FLOOR-78,w:62,h:78,hp:MAX_HP,en:100,vx:0,vy:0,face:-1,ground:true,def:false,flash:0,attack:0};
+const player={x:145,y:FLOOR-78,w:58,h:78,hp:MAX_HP,en:100,vx:0,vy:0,face:1,ground:true,platformId:null,springLock:0,hazardClock:0,def:false,flash:0,attack:0};
+const enemy={x:990,y:FLOOR-78,w:62,h:78,hp:MAX_HP,en:100,vx:0,vy:0,face:-1,ground:true,platformId:null,springLock:0,hazardClock:0,def:false,flash:0,attack:0};
 const blankStats=()=>({left:0,right:0,jumps:0,shots:0,melee:0,blocks:0,actions:0});
 function loadMemory(){try{const raw=localStorage.getItem(STORE_KEY);if(!raw)return {matches:0,stats:blankStats()};const data=JSON.parse(raw);return {matches:Number(data.matches)||0,stats:{...blankStats(),...(data.stats||{})}}}catch(_){return {matches:0,stats:blankStats()}}}
 let memory=loadMemory();
@@ -135,24 +146,63 @@ function showAI(action,reason,observation){$('aiAction').textContent=action;$('a
 function refreshLearning(){const r=ratios(),s=totalStats();$('skillLevel').textContent='Nivel '+level();$('matchCount').textContent=memory.matches;$('movePct').textContent=Math.round((r.left+r.right)*100)+'%';$('jumpPct').textContent=Math.round(r.jump*100)+'%';$('shotPct').textContent=Math.round(r.shot*100)+'%';$('meleePct').textContent=Math.round(r.melee*100)+'%';$('moveMeter').style.width=Math.min(100,(r.left+r.right)*100)+'%';$('jumpMeter').style.width=Math.min(100,r.jump*100)+'%';$('shotMeter').style.width=Math.min(100,r.shot*100)+'%';$('meleeMeter').style.width=Math.min(100,r.melee*100)+'%';$('learnSummary').textContent=dominantPattern()+'. Nexus ajustará sus esquivas y ataques con estos datos.';return s}
 function updateHUD(){[['pHp',player.hp,MAX_HP],['pEn',player.en,100],['eHp',enemy.hp,MAX_HP],['eEn',enemy.en,100]].forEach(([id,v,max])=>$(id).style.width=Math.max(0,v/max*100)+'%');$('pHpText').textContent=Math.ceil(player.hp)+' / '+MAX_HP;$('pEnText').textContent=Math.ceil(player.en)+' / 100';$('eHpText').textContent=Math.ceil(enemy.hp)+' / '+MAX_HP;$('eEnText').textContent=Math.ceil(enemy.en)+' / 100'}
 function say(text){$('message').textContent=text}
-function resetRound(){Object.assign(player,{x:145,y:FLOOR-78,hp:MAX_HP,en:100,vx:0,vy:0,face:1,ground:true,def:false,flash:0,attack:0});Object.assign(enemy,{x:990,y:FLOOR-78,hp:MAX_HP,en:100,vx:0,vy:0,face:-1,ground:true,def:false,flash:0,attack:0});projectiles=[];particles=[];session=makeSession();shotCooldown=0;playerMeleeCooldown=0;enemyShotCooldown=0;enemyMeleeCooldown=0;roundTime=90;running=false;paused=false;finished=false;aiClock=0;$('startBtn').disabled=false;$('pauseBtn').disabled=true;$('pauseBtn').textContent='Pausar';$('status').textContent='● LISTO PARA JUGAR';$('startBtn').textContent='Iniciar partida';$('rangeValue').textContent=$('range').value+' px';say('Pulsa «Iniciar partida» para comenzar.');showAI('ESPERANDO','Nexus analizará tu estilo mientras juegas.','Todavía no hay movimientos que analizar.');updateHUD();refreshLearning()}
+function resetRound(){Object.assign(player,{x:145,y:FLOOR-78,hp:MAX_HP,en:100,vx:0,vy:0,face:1,ground:true,def:false,flash:0,attack:0});Object.assign(enemy,{x:990,y:FLOOR-78,hp:MAX_HP,en:100,vx:0,vy:0,face:-1,ground:true,def:false,flash:0,attack:0});projectiles=[];particles=[];crates=CRATE_START.map(q=>({...q}));arenaClock=0;const lift=PLATFORMS.find(q=>q.id==='lift');lift.x=lift.baseX;lift.dx=0;PLATFORMS.forEach(q=>{if(q.moving)q.phase=0});session=makeSession();shotCooldown=0;playerMeleeCooldown=0;enemyShotCooldown=0;enemyMeleeCooldown=0;roundTime=90;running=false;paused=false;finished=false;aiClock=0;$('startBtn').disabled=false;$('pauseBtn').disabled=true;$('pauseBtn').textContent='Pausar';$('status').textContent='● LISTO PARA JUGAR';$('startBtn').textContent='Iniciar partida';$('rangeValue').textContent=$('range').value+' px';say('Pulsa «Iniciar partida» para comenzar.');showAI('ESPERANDO','Nexus analizará tu estilo mientras juegas.','Todavía no hay movimientos que analizar.');updateHUD();refreshLearning()}
+function updateArena(dt){
+ arenaClock+=dt;
+ for(const platform of PLATFORMS){
+  if(platform.moving){
+   const oldX=platform.x;
+   platform.phase+=dt*platform.speed;
+   platform.x=platform.baseX+Math.sin(platform.phase)*platform.range;
+   platform.dx=platform.x-oldX;
+   [player,enemy].forEach(f=>{
+    if(f.ground&&f.platformId===platform.id)f.x+=platform.dx;
+   });
+  }
+ }
+ [player,enemy].forEach(f=>{
+  f.springLock=Math.max(0,(f.springLock||0)-dt);
+  f.hazardClock=Math.max(0,(f.hazardClock||0)-dt);
+ });
+}
 function applyVerticalPhysics(f,dt){
  const previousBottom=f.y+f.h;
  f.vy+=1050*dt;
  f.y+=f.vy*dt;
  f.ground=false;
+ f.platformId=null;
  if(f.vy>=0){
   for(const platform of PLATFORMS){
    const horizontal=f.x+f.w>platform.x+7&&f.x<platform.x+platform.w-7;
-   const crossed=previousBottom<=platform.y+3&&f.y+f.h>=platform.y;
-   if(horizontal&&crossed){f.y=platform.y-f.h;f.vy=0;f.ground=true;break;}
+   const crossed=previousBottom<=platform.y+4&&f.y+f.h>=platform.y;
+   if(horizontal&&crossed){
+    f.y=platform.y-f.h;f.vy=0;f.ground=true;f.platformId=platform.id;break;
+   }
   }
  }
- if(f.y+f.h>=FLOOR){f.y=FLOOR-f.h;f.vy=0;f.ground=true;}
+ if(f.y+f.h>=FLOOR){
+  f.y=FLOOR-f.h;f.vy=0;f.ground=true;f.platformId=null;
+  const spring=SPRINGS.find(s=>f.x+f.w>s.x&&f.x<s.x+s.w);
+  if(spring&&f.springLock<=0){
+   f.vy=-720;f.ground=false;f.springLock=.55;
+   if(f===player){record('jumps');say('¡Trampolín! Atlas salió impulsado hacia arriba.')}
+   burst(f.x+f.w/2,FLOOR,'#55e6ff');
+  }
+ }
+}
+function applyHazards(f){
+ const onFloor=f.ground&&Math.abs(f.y+f.h-FLOOR)<2;
+ const hazard=onFloor?HAZARDS.find(h=>f.x+f.w>h.x&&f.x<h.x+h.w):null;
+ if(hazard&&f.hazardClock<=0){
+  f.hp=Math.max(0,f.hp-7);f.hazardClock=.8;f.flash=.15;
+  burst(f.x+f.w/2,FLOOR-4,'#ff6578');
+  if(f===player)say('¡Cuidado! La zona eléctrica te quitó 7 puntos de vida.');
+ }
 }
 function drawPlatforms(){
  for(const platform of PLATFORMS){
   const supportHeight=Math.max(0,FLOOR-platform.y-18);
+  if(platform.moving){ctx.save();ctx.shadowColor='#6cf1ff';ctx.shadowBlur=18;ctx.fillStyle='#287b92';ctx.fillRect(platform.x+22,platform.y+platform.h,platform.w-44,5);ctx.restore();} 
   const support=ctx.createLinearGradient(0,platform.y+18,0,FLOOR);
   support.addColorStop(0,'#203b55');support.addColorStop(1,'#101c2b');
   ctx.fillStyle=support;
@@ -162,7 +212,7 @@ function drawPlatforms(){
   metal.addColorStop(0,'#9db8ca');metal.addColorStop(.28,'#526f87');metal.addColorStop(1,'#1a3045');
   ctx.save();ctx.shadowColor='#4bdfff';ctx.shadowBlur=13;ctx.fillStyle=metal;
   ctx.fillRect(platform.x,platform.y,platform.w,18);ctx.restore();
-  ctx.fillStyle='#55e6ff';ctx.fillRect(platform.x,platform.y,platform.w,3);
+  ctx.fillStyle=platform.moving?'#a8fbff':(platform.bridge?'#f3c47d':'#55e6ff');ctx.fillRect(platform.x,platform.y,platform.w,3);
   ctx.fillStyle='#294b67';ctx.fillRect(platform.x+5,platform.y+7,platform.w-10,3);
   ctx.fillStyle='#b4d8e8';
   for(let bolt=platform.x+12;bolt<platform.x+platform.w-5;bolt+=28){
@@ -170,6 +220,42 @@ function drawPlatforms(){
   }
   ctx.fillStyle='#8caabd';ctx.font='bold 9px system-ui';ctx.textAlign='center';
   ctx.fillText(platform.label,platform.x+platform.w/2,platform.y-7);
+ }
+}
+function drawArenaFeatures(){
+ // Danger floor zones.
+ for(const h of HAZARDS){
+  ctx.save();ctx.fillStyle='#641f35';ctx.globalAlpha=.68;ctx.fillRect(h.x,FLOOR-5,h.w,5);ctx.globalAlpha=1;
+  for(let x=h.x-2;x<h.x+h.w;x+=17){
+   ctx.strokeStyle='#ff5c78';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(x,FLOOR-5);ctx.lineTo(x+10,FLOOR-27);ctx.stroke();
+  }
+  ctx.fillStyle='#ff9baa';ctx.font='bold 9px system-ui';ctx.textAlign='center';ctx.fillText('⚡ '+h.label,h.x+h.w/2,FLOOR-31);
+  ctx.restore();
+ }
+ // Spring pads at both ends of the arena.
+ for(const s of SPRINGS){
+  ctx.save();ctx.shadowColor='#55e6ff';ctx.shadowBlur=14;
+  ctx.fillStyle='#14546b';ctx.fillRect(s.x,FLOOR-9,s.w,9);
+  ctx.fillStyle='#55e6ff';ctx.fillRect(s.x+4,FLOOR-12,s.w-8,4);
+  ctx.restore();
+  ctx.strokeStyle='#8ceeff';ctx.lineWidth=3;
+  for(let x=s.x+9;x<s.x+s.w-5;x+=17){
+   ctx.beginPath();ctx.moveTo(x,FLOOR-12);ctx.lineTo(x+5,FLOOR-23);ctx.lineTo(x+10,FLOOR-12);ctx.stroke();
+  }
+  ctx.fillStyle='#c9f7ff';ctx.font='bold 9px system-ui';ctx.textAlign='center';ctx.fillText('↑ '+s.label,s.x+s.w/2,FLOOR-29);
+ }
+ // Destructible energy crates.
+ for(const box of crates){
+  ctx.save();ctx.shadowColor='#ffb45b';ctx.shadowBlur=8;
+  const metal=ctx.createLinearGradient(box.x,box.y,box.x+box.w,box.y+box.h);
+  metal.addColorStop(0,'#86613b');metal.addColorStop(.5,'#344b60');metal.addColorStop(1,'#182b3c');
+  ctx.fillStyle=metal;ctx.fillRect(box.x,box.y,box.w,box.h);ctx.restore();
+  ctx.strokeStyle='#f1bd78';ctx.lineWidth=2;ctx.strokeRect(box.x+2,box.y+2,box.w-4,box.h-4);
+  ctx.strokeStyle='#9bb1c2';ctx.lineWidth=2;ctx.strokeRect(box.x+8,box.y+7,box.w-16,box.h-14);
+  ctx.fillStyle='#ffd48b';ctx.fillRect(box.x+box.w/2-3,box.y+box.h/2-3,6,6);
+  ctx.fillStyle='#301d18';ctx.fillRect(box.x,box.y-7,box.w,4);
+  ctx.fillStyle='#ffb45b';ctx.fillRect(box.x,box.y-7,box.w*(box.hp/box.maxHp),4);
+  ctx.restore();
  }
 }
 function burst(x,y,color){for(let i=0;i<9;i++)particles.push({x,y,vx:(Math.random()-.5)*220,vy:(Math.random()-.5)*180,life:.34,max:.34,color})}
@@ -182,13 +268,16 @@ const dx=(to.x+to.w/2)-startX,dy=aimY-startY,dir=Math.sign(dx)||from.face,speed=
 function melee(from,to,isPlayer){if(from.en<12){if(isPlayer)say('Necesitas energía para el golpe.');return}if(isPlayer&&playerMeleeCooldown>0){say('Espera a que termine tu golpe.');return}if(!isPlayer&&enemyMeleeCooldown>0)return;from.en-=12;if(isPlayer){playerMeleeCooldown=.5;record('melee')}else enemyMeleeCooldown=.72;from.attack=.22;const dist=Math.abs((from.x+from.w/2)-(to.x+to.w/2));if(dist<112&&Math.abs((from.y+from.h/2)-(to.y+to.h/2))<82){const damage=isPlayer?14:Math.min(17,11+(level()-1));to.hp=Math.max(0,to.hp-(to.def?damage*.22:damage));to.flash=.18;burst(to.x+to.w/2,to.y+to.h*.43,'#ffe28a');if(isPlayer)say(to.def?'Nexus redujo el daño con su defensa.':'¡Golpe conectado!')}else if(isPlayer)say('Estás demasiado lejos para golpear.')}
 function finishRound(){if(finished)return;finished=true;running=false;paused=false;let winner=player.hp>enemy.hp?'Atlas':enemy.hp>player.hp?'Nexus':'Empate';memory.matches++;Object.keys(blankStats()).forEach(k=>memory.stats[k]=(memory.stats[k]||0)+(session[k]||0));const stored=saveMemory();session=makeSession();$('pauseBtn').disabled=true;$('startBtn').disabled=false;$('startBtn').textContent='Siguiente partida';$('status').textContent='● RONDA TERMINADA';if(winner==='Atlas')say('¡Victoria de Atlas! Nexus guardó lo que aprendió de tus movimientos.');else if(winner==='Nexus')say('Nexus ganó. Ha actualizado su memoria para la siguiente ronda.');else say('Empate. Nexus guardó los patrones observados.');showAI('APRENDIZAJE GUARDADO','La partida terminó. En la próxima ronda Nexus usará los patrones que observó.','Patrón detectado: '+dominantPattern()+'. Nivel de adaptación: '+level()+'/5.'+(stored?' Memoria guardada en este navegador.':' No se pudo guardar la memoria del navegador.'));refreshLearning();updateHUD()}
 function handlePlayer(){player.vx=0;if(keys.a||keys.ArrowLeft){player.vx=-245;player.face=-1}if(keys.d||keys.ArrowRight){player.vx=245;player.face=1}if(player.vx<0){}player.def=!!keys.k;if(player.def&&!keys._def){record('blocks');keys._def=true}if(!player.def)keys._def=false;if(keys.j&&!keys._j){melee(player,enemy,true);keys._j=true}if(!keys.j)keys._j=false;if((keys.l||keys.space)&&!keys._l){shoot(player,enemy,true);keys._l=true}if(!keys.l&&!keys.space)keys._l=false}
-function update(dt){if(!running||paused||finished)return;roundTime-=dt;shotCooldown=Math.max(0,shotCooldown-dt);playerMeleeCooldown=Math.max(0,playerMeleeCooldown-dt);enemyShotCooldown=Math.max(0,enemyShotCooldown-dt);enemyMeleeCooldown=Math.max(0,enemyMeleeCooldown-dt);
+function update(dt){if(!running||paused||finished)return;roundTime-=dt;updateArena(dt);shotCooldown=Math.max(0,shotCooldown-dt);playerMeleeCooldown=Math.max(0,playerMeleeCooldown-dt);enemyShotCooldown=Math.max(0,enemyShotCooldown-dt);enemyMeleeCooldown=Math.max(0,enemyMeleeCooldown-dt);
 [player,enemy].forEach(f=>{f.en=Math.min(100,f.en+8*dt);f.attack=Math.max(0,f.attack-dt);f.flash=Math.max(0,f.flash-dt)});
-handlePlayer();player.x=Math.max(12,Math.min(ARENA_WIDTH-player.w-12,player.x+player.vx*dt));if((keys.w||keys.ArrowUp)&&player.ground&&!keys._w){player.vy=-500;player.ground=false;record('jumps');keys._w=true}if(!(keys.w||keys.ArrowUp))keys._w=false;applyVerticalPhysics(player,dt)
+handlePlayer();player.x=Math.max(12,Math.min(ARENA_WIDTH-player.w-12,player.x+player.vx*dt));if((keys.w||keys.ArrowUp)&&player.ground&&!keys._w){player.vy=-500;player.ground=false;record('jumps');keys._w=true}if(!(keys.w||keys.ArrowUp))keys._w=false;applyVerticalPhysics(player,dt);applyHazards(player);
 aiClock-=dt;if(aiClock<=0){aiClock=Math.max(.1,.22-(level()-1)*.02);const dx=(player.x+player.w/2)-(enemy.x+enemy.w/2),dist=Math.abs(dx),range=Number($('range').value),r=ratios(),incoming=projectiles.find(b=>b.owner==='player'&&Math.abs(b.x-enemy.x)<185&&Math.abs(b.y-(enemy.y+enemy.h*.45))<65);
 enemy.face=Math.sign(dx)||-1;enemy.vx=0;enemy.def=false;
 if(player.y+player.h<enemy.y+enemy.h-38&&enemy.ground&&dist<390){enemy.vy=-510;enemy.ground=false;showAI('SUBIR A LAS GRADAS','Atlas está en una plataforma más alta. Nexus salta para alcanzarlo.','Altura de Atlas sobre el suelo: '+Math.round(FLOOR-(player.y+player.h))+' px.');}
 else if(incoming&&enemy.ground&&enemy.en>8){enemy.vy=-440;enemy.ground=false;enemy.def=true;showAI('ESQUIVAR','Detecté un disparo de plasma acercándose. Nexus salta para evitarlo.','Proyectil a '+Math.round(Math.abs(incoming.x-enemy.x))+' px. Aprendió a vigilar tus disparos.')}
+else if(crates.some(q=>((enemy.x<player.x&&q.x>enemy.x+enemy.w&&q.x<player.x)||(enemy.x>player.x&&q.x+q.w<enemy.x&&q.x>player.x))&&q.y+q.h>Math.min(player.y,enemy.y)+15&&q.y<Math.max(player.y,enemy.y)+enemy.h-10)&&enemyShotCooldown<=0&&enemy.en>=15){
+ shoot(enemy,player,false);showAI('DESTRUIR OBSTÁCULO','Una caja bloquea la línea de tiro. Nexus intenta destruirla para despejar el camino.','Obstáculo destructible detectado entre Atlas y Nexus.');
+}
 else if(player.attack>0&&dist<145){enemy.def=true;showAI('DEFENDERSE','Atlas está usando un golpe cercano. Nexus activa su defensa.','Distancia: '+Math.round(dist)+' px.')}
 else if(r.shot>.32&&dist<300&&dist>110){enemy.vx=-enemy.face*75;showAI('CAMBIAR POSICIÓN','Has usado muchos disparos. Nexus se desplaza para no quedarse en tu línea de tiro.','Tus disparos representan '+Math.round(r.shot*100)+'% de tus acciones registradas.')}
 else if(dist<92&&r.melee>.2&&enemyMeleeCooldown<=0&&enemy.en>25){melee(enemy,player,false);showAI('CONTRAATACAR','Detecté que prefieres acercarte para golpear. Nexus responde con un contraataque.','Tus golpes cercanos representan '+Math.round(r.melee*100)+'% de tus acciones.')}
@@ -198,13 +287,31 @@ else if(enemyShotCooldown<=0&&enemy.en>=15){shoot(enemy,player,false);showAI('DI
 else if(dist>range*.72){enemy.vx=enemy.face*90;showAI('REPOSICIONARSE','Nexus busca una distancia cómoda y espera su siguiente disparo.','Rango de ataque: '+range+' px.')}
 else{enemy.def=true;showAI('PROTEGERSE','Nexus espera mientras recupera energía y vigila tus movimientos.','Energía de Nexus: '+Math.floor(enemy.en)+'. '+dominantPattern()+'.')}
 }
-enemy.x=Math.max(12,Math.min(ARENA_WIDTH-enemy.w-12,enemy.x+enemy.vx*dt));applyVerticalPhysics(enemy,dt)
-projectiles.forEach(b=>{b.x+=b.vx*dt;b.y+=b.vy*dt;b.life-=dt;const target=b.owner==='player'?enemy:player;if(b.x>target.x-4&&b.x<target.x+target.w+4&&b.y>target.y+5&&b.y<target.y+target.h){const damage=target.def?b.damage*.22:b.damage;target.hp=Math.max(0,target.hp-damage);target.flash=.16;burst(b.x,b.y,b.color);b.life=0}});projectiles=projectiles.filter(b=>b.life>0&&b.x>-20&&b.x<ARENA_WIDTH+20&&b.y>180&&b.y<430);
+const predictedEnemyX=enemy.x+enemy.vx*.22;
+const approachingHazard=HAZARDS.find(h=>predictedEnemyX+enemy.w>h.x-12&&predictedEnemyX<h.x+h.w+12);
+if(approachingHazard&&enemy.ground&&Math.abs(enemy.vx)>25){
+ enemy.vy=-530;enemy.ground=false;showAI('SALTAR ZONA ELÉCTRICA','Nexus detectó una zona peligrosa en su trayectoria y salta para evitarla.','Zona eléctrica: '+approachingHazard.x+'–'+(approachingHazard.x+approachingHazard.w)+' px.');
+}
+enemy.x=Math.max(12,Math.min(ARENA_WIDTH-enemy.w-12,enemy.x+enemy.vx*dt));applyVerticalPhysics(enemy,dt);applyHazards(enemy);
+projectiles.forEach(b=>{
+ b.x+=b.vx*dt;b.y+=b.vy*dt;b.life-=dt;
+ const box=crates.find(q=>q.hp>0&&b.x>q.x-3&&b.x<q.x+q.w+3&&b.y>q.y-3&&b.y<q.y+q.h+3);
+ if(box){
+  box.hp--;burst(b.x,b.y,'#ffca79');b.life=0;
+  if(box.hp<=0){burst(box.x+box.w/2,box.y+box.h/2,'#ffd27c');if(b.owner==='player')say('¡Caja destruida! Camino despejado.');}
+ }else{
+  const target=b.owner==='player'?enemy:player;
+  if(b.x>target.x-4&&b.x<target.x+target.w+4&&b.y>target.y+5&&b.y<target.y+target.h){
+   const damage=target.def?b.damage*.22:b.damage;target.hp=Math.max(0,target.hp-damage);target.flash=.16;burst(b.x,b.y,b.color);b.life=0;
+  }
+ }
+});
+crates=crates.filter(q=>q.hp>0);projectiles=projectiles.filter(b=>b.life>0&&b.x>-20&&b.x<ARENA_WIDTH+20&&b.y>180&&b.y<430);
 particles=particles.filter(q=>q.life>0);particles.forEach(q=>{q.x+=q.vx*dt;q.y+=q.vy*dt;q.life-=dt});
 if(player.hp<=0||enemy.hp<=0||roundTime<=0)finishRound();updateHUD()}
 function drawRobot(f,color,accent,name){ctx.save();ctx.translate(f.x+f.w/2,f.y+f.h/2);ctx.scale(f.face,1);ctx.translate(-f.w/2,-f.h/2);ctx.shadowColor=color;ctx.shadowBlur=f.flash>0?24:12;ctx.fillStyle=color;ctx.fillRect(9,21,39,42);ctx.fillRect(13,5,32,27);ctx.fillRect(3,28,12,29);ctx.fillRect(45,28,12,29);ctx.shadowBlur=0;ctx.fillStyle=accent;ctx.fillRect(18,14,22,7);ctx.fillRect(17,37,24,5);ctx.fillRect(13,64,13,11);ctx.fillRect(34,64,13,11);ctx.fillStyle='#07111d';ctx.fillRect(21,16,5,3);ctx.fillRect(32,16,5,3);ctx.fillStyle=color;ctx.fillRect(47,32,15,8);ctx.fillStyle=accent;ctx.fillRect(58,32,8,7);ctx.restore();ctx.fillStyle='#eaf4ff';ctx.font='bold 12px system-ui';ctx.textAlign='center';ctx.fillText(name,f.x+f.w/2,f.y-10)}
 function draw(){ctx.clearRect(0,0,ARENA_WIDTH,500);const gr=ctx.createLinearGradient(0,0,0,500);gr.addColorStop(0,'#101e34');gr.addColorStop(1,'#17263a');ctx.fillStyle=gr;ctx.fillRect(0,0,ARENA_WIDTH,500);ctx.strokeStyle='#203d57';ctx.lineWidth=1;for(let x=0;x<ARENA_WIDTH;x+=45){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,FLOOR);ctx.stroke()}for(let y=30;y<FLOOR;y+=45){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(ARENA_WIDTH,y);ctx.stroke()}ctx.fillStyle='#233c53';ctx.fillRect(0,FLOOR,ARENA_WIDTH,92);ctx.fillStyle='#4edcf5';ctx.fillRect(0,FLOOR,ARENA_WIDTH,4);for(let x=20;x<ARENA_WIDTH;x+=80){ctx.fillStyle='#31536a';ctx.fillRect(x,FLOOR+25,38,4)}for(let x=90;x<ARENA_WIDTH;x+=180){ctx.fillStyle='#1b4056';ctx.fillRect(x,65,5,110);ctx.fillStyle='#4de5ff';ctx.fillRect(x-3,65,11,4)}
-drawPlatforms();drawRobot(player,'#3ad8ff','#c5f7ff','ATLAS');drawRobot(enemy,'#ff536e','#ffd1d8','NEXUS');
+drawPlatforms();drawArenaFeatures();drawRobot(player,'#3ad8ff','#c5f7ff','ATLAS');drawRobot(enemy,'#ff536e','#ffd1d8','NEXUS');
 projectiles.forEach(b=>{ctx.save();ctx.shadowColor=b.color;ctx.shadowBlur=18;ctx.fillStyle=b.color;ctx.beginPath();ctx.arc(b.x,b.y,b.r,0,Math.PI*2);ctx.fill();ctx.restore()});particles.forEach(q=>{ctx.globalAlpha=Math.max(0,q.life/q.max);ctx.fillStyle=q.color;ctx.fillRect(q.x,q.y,5,5)});ctx.globalAlpha=1;
 ctx.fillStyle='#e5f4ff';ctx.font='bold 16px system-ui';ctx.textAlign='center';ctx.fillText('TIEMPO  '+Math.max(0,Math.ceil(roundTime))+'s',600,30);
 if(!running){ctx.fillStyle='#06101dbb';ctx.fillRect(0,0,ARENA_WIDTH,500);ctx.textAlign='center';ctx.fillStyle='white';ctx.font='900 34px system-ui';ctx.fillText(finished?'RONDA TERMINADA':'ROBOT ARENA AI',600,215);ctx.fillStyle='#b5cce2';ctx.font='16px system-ui';ctx.fillText(finished?'Nexus usará lo aprendido en la próxima partida':'Pulsa Iniciar partida para comenzar',600,250)}
