@@ -29,7 +29,7 @@
   <div class="fighter"><div class="row"><b>ATLAS · JUGADOR</b><span id="pHpText">120 / 120</span></div><div class="track"><div class="fill" id="pHp" style="width:100%"></div></div><div class="row"><span>ENERGÍA</span><span id="pEnText">100 / 100</span></div><div class="track"><div class="fill energy" id="pEn" style="width:100%"></div></div></div>
   <div class="fighter"><div class="row"><b>NEXUS · IA</b><span id="eHpText">120 / 120</span></div><div class="track"><div class="fill" id="eHp" style="width:100%"></div></div><div class="row"><span>ENERGÍA</span><span id="eEnText">100 / 100</span></div><div class="track"><div class="fill energy" id="eEn" style="width:100%"></div></div></div>
  </div>
- <div class="keys"><span class="key">A / D · MOVER</span><span class="key">W · SALTAR</span><span class="key">J · GOLPE</span><span class="key">L / ESPACIO · DISPARAR</span><span class="key">K · DEFENDER</span></div>
+ <div class="keys"><span class="key">A / D · MOVER</span><span class="key">W · SALTAR Y SUBIR GRADAS</span><span class="key">J · GOLPE</span><span class="key">L / ESPACIO · DISPARAR</span><span class="key">K · DEFENDER</span></div>
  <div class="msg" id="message" aria-live="polite">Pulsa «Iniciar partida» para comenzar.</div>
  <div class="actions"><button id="startBtn">Iniciar partida</button><button id="pauseBtn" class="alt" disabled>Pausar</button><button id="resetBtn" class="alt">Reiniciar ronda</button></div>
 </section>
@@ -111,6 +111,13 @@
 'use strict';
 const canvas=document.getElementById('game'),ctx=canvas.getContext('2d'),$=id=>document.getElementById(id),keys={};
 const ARENA_WIDTH=1200,FLOOR=408,MAX_HP=120,STORE_KEY='robotArenaAI.learning.v2';
+const PLATFORMS=[
+ {x:220,y:350,w:145,h:18,label:'GRADA 1'},
+ {x:370,y:310,w:145,h:18,label:'GRADA 2'},
+ {x:520,y:270,w:175,h:18,label:'PLATAFORMA ALTA'},
+ {x:700,y:310,w:145,h:18,label:'GRADA 2'},
+ {x:850,y:350,w:170,h:18,label:'GRADA 1'}
+];
 let running=false,paused=false,finished=false,lastTime=0,aiClock=0,roundTime=90,projectiles=[],particles=[],session=null,shotCooldown=0,playerMeleeCooldown=0,enemyShotCooldown=0,enemyMeleeCooldown=0;
 const player={x:145,y:FLOOR-78,w:58,h:78,hp:MAX_HP,en:100,vx:0,vy:0,face:1,ground:true,def:false,flash:0,attack:0};
 const enemy={x:990,y:FLOOR-78,w:62,h:78,hp:MAX_HP,en:100,vx:0,vy:0,face:-1,ground:true,def:false,flash:0,attack:0};
@@ -129,6 +136,42 @@ function refreshLearning(){const r=ratios(),s=totalStats();$('skillLevel').textC
 function updateHUD(){[['pHp',player.hp,MAX_HP],['pEn',player.en,100],['eHp',enemy.hp,MAX_HP],['eEn',enemy.en,100]].forEach(([id,v,max])=>$(id).style.width=Math.max(0,v/max*100)+'%');$('pHpText').textContent=Math.ceil(player.hp)+' / '+MAX_HP;$('pEnText').textContent=Math.ceil(player.en)+' / 100';$('eHpText').textContent=Math.ceil(enemy.hp)+' / '+MAX_HP;$('eEnText').textContent=Math.ceil(enemy.en)+' / 100'}
 function say(text){$('message').textContent=text}
 function resetRound(){Object.assign(player,{x:145,y:FLOOR-78,hp:MAX_HP,en:100,vx:0,vy:0,face:1,ground:true,def:false,flash:0,attack:0});Object.assign(enemy,{x:990,y:FLOOR-78,hp:MAX_HP,en:100,vx:0,vy:0,face:-1,ground:true,def:false,flash:0,attack:0});projectiles=[];particles=[];session=makeSession();shotCooldown=0;playerMeleeCooldown=0;enemyShotCooldown=0;enemyMeleeCooldown=0;roundTime=90;running=false;paused=false;finished=false;aiClock=0;$('startBtn').disabled=false;$('pauseBtn').disabled=true;$('pauseBtn').textContent='Pausar';$('status').textContent='● LISTO PARA JUGAR';$('startBtn').textContent='Iniciar partida';$('rangeValue').textContent=$('range').value+' px';say('Pulsa «Iniciar partida» para comenzar.');showAI('ESPERANDO','Nexus analizará tu estilo mientras juegas.','Todavía no hay movimientos que analizar.');updateHUD();refreshLearning()}
+function applyVerticalPhysics(f,dt){
+ const previousBottom=f.y+f.h;
+ f.vy+=1050*dt;
+ f.y+=f.vy*dt;
+ f.ground=false;
+ if(f.vy>=0){
+  for(const platform of PLATFORMS){
+   const horizontal=f.x+f.w>platform.x+7&&f.x<platform.x+platform.w-7;
+   const crossed=previousBottom<=platform.y+3&&f.y+f.h>=platform.y;
+   if(horizontal&&crossed){f.y=platform.y-f.h;f.vy=0;f.ground=true;break;}
+  }
+ }
+ if(f.y+f.h>=FLOOR){f.y=FLOOR-f.h;f.vy=0;f.ground=true;}
+}
+function drawPlatforms(){
+ for(const platform of PLATFORMS){
+  const supportHeight=Math.max(0,FLOOR-platform.y-18);
+  const support=ctx.createLinearGradient(0,platform.y+18,0,FLOOR);
+  support.addColorStop(0,'#203b55');support.addColorStop(1,'#101c2b');
+  ctx.fillStyle=support;
+  ctx.fillRect(platform.x+12,platform.y+18,13,supportHeight);
+  ctx.fillRect(platform.x+platform.w-25,platform.y+18,13,supportHeight);
+  const metal=ctx.createLinearGradient(0,platform.y,0,platform.y+18);
+  metal.addColorStop(0,'#9db8ca');metal.addColorStop(.28,'#526f87');metal.addColorStop(1,'#1a3045');
+  ctx.save();ctx.shadowColor='#4bdfff';ctx.shadowBlur=13;ctx.fillStyle=metal;
+  ctx.fillRect(platform.x,platform.y,platform.w,18);ctx.restore();
+  ctx.fillStyle='#55e6ff';ctx.fillRect(platform.x,platform.y,platform.w,3);
+  ctx.fillStyle='#294b67';ctx.fillRect(platform.x+5,platform.y+7,platform.w-10,3);
+  ctx.fillStyle='#b4d8e8';
+  for(let bolt=platform.x+12;bolt<platform.x+platform.w-5;bolt+=28){
+   ctx.beginPath();ctx.arc(bolt,platform.y+12,2,0,Math.PI*2);ctx.fill();
+  }
+  ctx.fillStyle='#8caabd';ctx.font='bold 9px system-ui';ctx.textAlign='center';
+  ctx.fillText(platform.label,platform.x+platform.w/2,platform.y-7);
+ }
+}
 function burst(x,y,color){for(let i=0;i<9;i++)particles.push({x,y,vx:(Math.random()-.5)*220,vy:(Math.random()-.5)*180,life:.34,max:.34,color})}
 function shoot(from,to,isPlayer){if(!running||paused||finished)return false;if(from.en<15){if(isPlayer)say('No tienes energía suficiente para disparar.');return false}if(isPlayer&&shotCooldown>0){say('Espera un instante para volver a disparar.');return false}if(!isPlayer&&enemyShotCooldown>0)return false;
 from.en-=15;if(isPlayer){shotCooldown=.42;record('shots')}else enemyShotCooldown=Math.max(.72,1.5-(level()-1)*.12);
@@ -141,10 +184,11 @@ function finishRound(){if(finished)return;finished=true;running=false;paused=fal
 function handlePlayer(){player.vx=0;if(keys.a||keys.ArrowLeft){player.vx=-245;player.face=-1}if(keys.d||keys.ArrowRight){player.vx=245;player.face=1}if(player.vx<0){}player.def=!!keys.k;if(player.def&&!keys._def){record('blocks');keys._def=true}if(!player.def)keys._def=false;if(keys.j&&!keys._j){melee(player,enemy,true);keys._j=true}if(!keys.j)keys._j=false;if((keys.l||keys.space)&&!keys._l){shoot(player,enemy,true);keys._l=true}if(!keys.l&&!keys.space)keys._l=false}
 function update(dt){if(!running||paused||finished)return;roundTime-=dt;shotCooldown=Math.max(0,shotCooldown-dt);playerMeleeCooldown=Math.max(0,playerMeleeCooldown-dt);enemyShotCooldown=Math.max(0,enemyShotCooldown-dt);enemyMeleeCooldown=Math.max(0,enemyMeleeCooldown-dt);
 [player,enemy].forEach(f=>{f.en=Math.min(100,f.en+8*dt);f.attack=Math.max(0,f.attack-dt);f.flash=Math.max(0,f.flash-dt)});
-handlePlayer();player.x=Math.max(12,Math.min(ARENA_WIDTH-player.w-12,player.x+player.vx*dt));if((keys.w||keys.ArrowUp)&&player.ground&&!keys._w){player.vy=-500;player.ground=false;record('jumps');keys._w=true}if(!(keys.w||keys.ArrowUp))keys._w=false;player.vy+=1050*dt;player.y+=player.vy*dt;if(player.y+player.h>=FLOOR){player.y=FLOOR-player.h;player.vy=0;player.ground=true}
+handlePlayer();player.x=Math.max(12,Math.min(ARENA_WIDTH-player.w-12,player.x+player.vx*dt));if((keys.w||keys.ArrowUp)&&player.ground&&!keys._w){player.vy=-500;player.ground=false;record('jumps');keys._w=true}if(!(keys.w||keys.ArrowUp))keys._w=false;applyVerticalPhysics(player,dt)
 aiClock-=dt;if(aiClock<=0){aiClock=Math.max(.1,.22-(level()-1)*.02);const dx=(player.x+player.w/2)-(enemy.x+enemy.w/2),dist=Math.abs(dx),range=Number($('range').value),r=ratios(),incoming=projectiles.find(b=>b.owner==='player'&&Math.abs(b.x-enemy.x)<185&&Math.abs(b.y-(enemy.y+enemy.h*.45))<65);
 enemy.face=Math.sign(dx)||-1;enemy.vx=0;enemy.def=false;
-if(incoming&&enemy.ground&&enemy.en>8){enemy.vy=-440;enemy.ground=false;enemy.def=true;showAI('ESQUIVAR','Detecté un disparo de plasma acercándose. Nexus salta para evitarlo.','Proyectil a '+Math.round(Math.abs(incoming.x-enemy.x))+' px. Aprendió a vigilar tus disparos.')}
+if(player.y+player.h<enemy.y+enemy.h-38&&enemy.ground&&dist<390){enemy.vy=-510;enemy.ground=false;showAI('SUBIR A LAS GRADAS','Atlas está en una plataforma más alta. Nexus salta para alcanzarlo.','Altura de Atlas sobre el suelo: '+Math.round(FLOOR-(player.y+player.h))+' px.');}
+else if(incoming&&enemy.ground&&enemy.en>8){enemy.vy=-440;enemy.ground=false;enemy.def=true;showAI('ESQUIVAR','Detecté un disparo de plasma acercándose. Nexus salta para evitarlo.','Proyectil a '+Math.round(Math.abs(incoming.x-enemy.x))+' px. Aprendió a vigilar tus disparos.')}
 else if(player.attack>0&&dist<145){enemy.def=true;showAI('DEFENDERSE','Atlas está usando un golpe cercano. Nexus activa su defensa.','Distancia: '+Math.round(dist)+' px.')}
 else if(r.shot>.32&&dist<300&&dist>110){enemy.vx=-enemy.face*75;showAI('CAMBIAR POSICIÓN','Has usado muchos disparos. Nexus se desplaza para no quedarse en tu línea de tiro.','Tus disparos representan '+Math.round(r.shot*100)+'% de tus acciones registradas.')}
 else if(dist<92&&r.melee>.2&&enemyMeleeCooldown<=0&&enemy.en>25){melee(enemy,player,false);showAI('CONTRAATACAR','Detecté que prefieres acercarte para golpear. Nexus responde con un contraataque.','Tus golpes cercanos representan '+Math.round(r.melee*100)+'% de tus acciones.')}
@@ -154,17 +198,17 @@ else if(enemyShotCooldown<=0&&enemy.en>=15){shoot(enemy,player,false);showAI('DI
 else if(dist>range*.72){enemy.vx=enemy.face*90;showAI('REPOSICIONARSE','Nexus busca una distancia cómoda y espera su siguiente disparo.','Rango de ataque: '+range+' px.')}
 else{enemy.def=true;showAI('PROTEGERSE','Nexus espera mientras recupera energía y vigila tus movimientos.','Energía de Nexus: '+Math.floor(enemy.en)+'. '+dominantPattern()+'.')}
 }
-enemy.x=Math.max(12,Math.min(ARENA_WIDTH-enemy.w-12,enemy.x+enemy.vx*dt));enemy.vy+=1050*dt;enemy.y+=enemy.vy*dt;if(enemy.y+enemy.h>=FLOOR){enemy.y=FLOOR-enemy.h;enemy.vy=0;enemy.ground=true}
+enemy.x=Math.max(12,Math.min(ARENA_WIDTH-enemy.w-12,enemy.x+enemy.vx*dt));applyVerticalPhysics(enemy,dt)
 projectiles.forEach(b=>{b.x+=b.vx*dt;b.y+=b.vy*dt;b.life-=dt;const target=b.owner==='player'?enemy:player;if(b.x>target.x-4&&b.x<target.x+target.w+4&&b.y>target.y+5&&b.y<target.y+target.h){const damage=target.def?b.damage*.22:b.damage;target.hp=Math.max(0,target.hp-damage);target.flash=.16;burst(b.x,b.y,b.color);b.life=0}});projectiles=projectiles.filter(b=>b.life>0&&b.x>-20&&b.x<ARENA_WIDTH+20&&b.y>180&&b.y<430);
 particles=particles.filter(q=>q.life>0);particles.forEach(q=>{q.x+=q.vx*dt;q.y+=q.vy*dt;q.life-=dt});
 if(player.hp<=0||enemy.hp<=0||roundTime<=0)finishRound();updateHUD()}
 function drawRobot(f,color,accent,name){ctx.save();ctx.translate(f.x+f.w/2,f.y+f.h/2);ctx.scale(f.face,1);ctx.translate(-f.w/2,-f.h/2);ctx.shadowColor=color;ctx.shadowBlur=f.flash>0?24:12;ctx.fillStyle=color;ctx.fillRect(9,21,39,42);ctx.fillRect(13,5,32,27);ctx.fillRect(3,28,12,29);ctx.fillRect(45,28,12,29);ctx.shadowBlur=0;ctx.fillStyle=accent;ctx.fillRect(18,14,22,7);ctx.fillRect(17,37,24,5);ctx.fillRect(13,64,13,11);ctx.fillRect(34,64,13,11);ctx.fillStyle='#07111d';ctx.fillRect(21,16,5,3);ctx.fillRect(32,16,5,3);ctx.fillStyle=color;ctx.fillRect(47,32,15,8);ctx.fillStyle=accent;ctx.fillRect(58,32,8,7);ctx.restore();ctx.fillStyle='#eaf4ff';ctx.font='bold 12px system-ui';ctx.textAlign='center';ctx.fillText(name,f.x+f.w/2,f.y-10)}
 function draw(){ctx.clearRect(0,0,ARENA_WIDTH,500);const gr=ctx.createLinearGradient(0,0,0,500);gr.addColorStop(0,'#101e34');gr.addColorStop(1,'#17263a');ctx.fillStyle=gr;ctx.fillRect(0,0,ARENA_WIDTH,500);ctx.strokeStyle='#203d57';ctx.lineWidth=1;for(let x=0;x<ARENA_WIDTH;x+=45){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,FLOOR);ctx.stroke()}for(let y=30;y<FLOOR;y+=45){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(ARENA_WIDTH,y);ctx.stroke()}ctx.fillStyle='#233c53';ctx.fillRect(0,FLOOR,ARENA_WIDTH,92);ctx.fillStyle='#4edcf5';ctx.fillRect(0,FLOOR,ARENA_WIDTH,4);for(let x=20;x<ARENA_WIDTH;x+=80){ctx.fillStyle='#31536a';ctx.fillRect(x,FLOOR+25,38,4)}for(let x=90;x<ARENA_WIDTH;x+=180){ctx.fillStyle='#1b4056';ctx.fillRect(x,65,5,110);ctx.fillStyle='#4de5ff';ctx.fillRect(x-3,65,11,4)}
-drawRobot(player,'#3ad8ff','#c5f7ff','ATLAS');drawRobot(enemy,'#ff536e','#ffd1d8','NEXUS');
+drawPlatforms();drawRobot(player,'#3ad8ff','#c5f7ff','ATLAS');drawRobot(enemy,'#ff536e','#ffd1d8','NEXUS');
 projectiles.forEach(b=>{ctx.save();ctx.shadowColor=b.color;ctx.shadowBlur=18;ctx.fillStyle=b.color;ctx.beginPath();ctx.arc(b.x,b.y,b.r,0,Math.PI*2);ctx.fill();ctx.restore()});particles.forEach(q=>{ctx.globalAlpha=Math.max(0,q.life/q.max);ctx.fillStyle=q.color;ctx.fillRect(q.x,q.y,5,5)});ctx.globalAlpha=1;
 ctx.fillStyle='#e5f4ff';ctx.font='bold 16px system-ui';ctx.textAlign='center';ctx.fillText('TIEMPO  '+Math.max(0,Math.ceil(roundTime))+'s',600,30);
-if(!running){ctx.fillStyle='#06101dbb';ctx.fillRect(0,0,900,500);ctx.textAlign='center';ctx.fillStyle='white';ctx.font='900 34px system-ui';ctx.fillText(finished?'RONDA TERMINADA':'ROBOT ARENA AI',600,215);ctx.fillStyle='#b5cce2';ctx.font='16px system-ui';ctx.fillText(finished?'Nexus usará lo aprendido en la próxima partida':'Pulsa Iniciar partida para comenzar',600,250)}
-if(paused){ctx.fillStyle='#06101dcc';ctx.fillRect(0,0,900,500);ctx.textAlign='center';ctx.fillStyle='white';ctx.font='900 36px system-ui';ctx.fillText('PAUSA',600,245)}}
+if(!running){ctx.fillStyle='#06101dbb';ctx.fillRect(0,0,ARENA_WIDTH,500);ctx.textAlign='center';ctx.fillStyle='white';ctx.font='900 34px system-ui';ctx.fillText(finished?'RONDA TERMINADA':'ROBOT ARENA AI',600,215);ctx.fillStyle='#b5cce2';ctx.font='16px system-ui';ctx.fillText(finished?'Nexus usará lo aprendido en la próxima partida':'Pulsa Iniciar partida para comenzar',600,250)}
+if(paused){ctx.fillStyle='#06101dcc';ctx.fillRect(0,0,ARENA_WIDTH,500);ctx.textAlign='center';ctx.fillStyle='white';ctx.font='900 36px system-ui';ctx.fillText('PAUSA',600,245)}}
 function loop(t){const dt=Math.min(.033,(t-lastTime)/1000||0);lastTime=t;update(dt);draw();requestAnimationFrame(loop)}
 window.addEventListener('keydown',ev=>{const k=ev.code==='Space'?'space':(ev.key.length===1?ev.key.toLowerCase():ev.key);if(['ArrowLeft','ArrowRight','ArrowUp'].includes(ev.key)||ev.code==='Space')ev.preventDefault();if(!keys[k]){if(k==='a'||k==='ArrowLeft')record('left');if(k==='d'||k==='ArrowRight')record('right')}keys[k]=true});
 window.addEventListener('keyup',ev=>{const k=ev.code==='Space'?'space':(ev.key.length===1?ev.key.toLowerCase():ev.key);keys[k]=false});
