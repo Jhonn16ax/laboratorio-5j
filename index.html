@@ -83,7 +83,7 @@
   <div class="note">Golpes cercanos <span id="meleePct">0%</span><div class="meter"><i id="meleeMeter"></i></div></div>
   <p class="note">La memoria se guarda solo en este navegador mediante almacenamiento local.</p>
 
-  <div class="memory-log"><div class="label">APRENDIZAJE POR EXPERIENCIA</div>
+  <div class="memory-log"><div class="label">APRENDIZAJE POR EXPERIENCIA</div><p class="note">Nexus compara el daño que causa y recibe al usar cada táctica. Con esos resultados decide qué repetir y qué cambiar.</p>
    <p class="note"><b>Lo que le funcionó:</b> <span id="experienceWorked">Todavía necesita combatir para descubrirlo.</span></p>
    <p class="note"><b>Lo que no le funcionó:</b> <span id="experienceFailed">Todavía no tiene errores registrados.</span></p>
    <p class="note"><b>Qué cambiará:</b> <span id="experienceLesson">Jugará una partida y medirá el resultado de sus tácticas.</span></p>
@@ -189,7 +189,7 @@ const player={...ROBOT_CONFIGS[selectedRobotKey],x:145,y:FLOOR-78,w:58,h:78,hp:R
 const enemy={x:990,y:FLOOR-78,w:62,h:78,hp:MAX_HP,en:100,vx:0,vy:0,face:-1,ground:true,platformId:null,springLock:0,hazardClock:0,def:false,flash:0,attack:0};
 const blankStats=()=>({left:0,right:0,jumps:0,shots:0,melee:0,blocks:0,actions:0});
 const TACTIC_IDS=['basic','copy','dodge','counter','predict','reposition','approach','defend'];
-function blankExperience(){const tactics={};TACTIC_IDS.forEach(id=>tactics[id]={attempts:0,dealt:0,received:0});return {tactics,lastWorked:'',lastFailed:'',lesson:'Jugará una partida y medirá el resultado de sus tácticas.'}}
+function blankExperience(){const tactics={};TACTIC_IDS.forEach(id=>tactics[id]={attempts:0,dealt:0,received:0});return {rounds:0,tactics,lastWorked:'',lastFailed:'',lesson:'Jugará una partida y medirá el resultado de sus tácticas.'}}
 function tacticLabel(id){return ({basic:'estrategia básica',copy:'copiar movimientos',dodge:'esquivar',counter:'contraatacar',predict:'anticipar saltos',reposition:'cambiar de posición',approach:'acercarse',defend:'defenderse'})[id]||id}
 function tacticScore(row){return row&&row.attempts?((row.dealt-row.received)/row.attempts):0}
 function bestTacticId(experience){let best='',score=-Infinity;TACTIC_IDS.forEach(id=>{const row=experience.tactics[id];if(row&&row.attempts>=1&&tacticScore(row)>score){score=tacticScore(row);best=id}});return best}
@@ -433,6 +433,7 @@ function finishRound(){
  memory.previousReport=memory.lastReport||null;memory.lastReport=report;memory.matches++;
  Object.keys(blankStats()).forEach(k=>memory.stats[k]=(memory.stats[k]||0)+(session[k]||0));
  TACTIC_IDS.forEach(id=>{const old=memory.experience.tactics[id]||{attempts:0,dealt:0,received:0},now=session.tactics[id]||{attempts:0,dealt:0,received:0};memory.experience.tactics[id]={attempts:old.attempts+now.attempts,dealt:old.dealt+now.dealt,received:old.received+now.received}});
+ memory.experience.rounds=(memory.experience.rounds||0)+1;
  updateExperienceLesson();
  const latestTimeline=(session.timeline||[]).concat([{t:Number((session.elapsed+.01).toFixed(2)),type:'state',state:{left:false,right:false,block:false}}]);
  const hasUsefulInput=latestTimeline.some(event=>event.type==='tap'||(event.type==='state'&&event.state&&(event.state.left||event.state.right||event.state.block)));
@@ -454,8 +455,8 @@ const dx=(player.x+player.w/2)-(enemy.x+enemy.w/2),dist=Math.abs(dx);
 aiClock-=dt;
 if(aiClock<=0){
  aiClock=.22;
- if(memory.matches===1&&hasLearnedPattern()){setAITactic('copy');replayPreviousPattern()}
- else if(memory.matches>=2&&hasLearnedPattern()){
+ if(memory.experience.rounds===1&&hasLearnedPattern()){setAITactic('copy');replayPreviousPattern()}
+ else if(memory.experience.rounds>=2&&hasLearnedPattern()){
   const incoming=projectiles.find(b=>b.owner==='player'&&Math.abs(b.x-enemy.x)<185&&Math.abs(b.y-(enemy.y+enemy.h*.45))<65);
   adaptNexus(dist,dx,incoming)
  }else{
@@ -498,9 +499,9 @@ window.addEventListener('keydown',ev=>{const k=ev.code==='Space'?'space':(ev.key
 window.addEventListener('keyup',ev=>{const k=ev.code==='Space'?'space':(ev.key.length===1?ev.key.toLowerCase():ev.key);keys[k]=false});
 $('startBtn').onclick=()=>{
  if(finished)resetRound();$('resultOverlay').hidden=true;running=true;paused=false;$('startBtn').disabled=true;$('pauseBtn').disabled=false;$('robotSelect').disabled=true;$('status').textContent='● COMBATE EN CURSO';
- if(!hasLearnedPattern()){showAI('SIN EXPERIENCIA PREVIA','Nexus empieza con un comportamiento básico. No conoce tus hábitos todavía y observará esta partida.','Primera partida: no hay movimientos guardados que pueda copiar.');say('Primera partida: Nexus comienza sin conocer tu estilo.');}
- else if(memory.matches===1){showAI('COPIAR PARTIDA ANTERIOR','Nexus reproducirá los movimientos que guardó en la primera partida.','Secuencia guardada: '+memory.timeline.length+' eventos.');say('Segunda partida: Nexus copiará lo que hiciste en la primera.');}
- else{showAI('MODO ADAPTACIÓN','Nexus ya copió una partida y ahora usa los patrones aprendidos para contrarrestar tu estilo.','Patrón detectado: '+dominantPattern()+'.');say('Tercera partida: Nexus adapta su estrategia a tu estilo.');}
+ if(memory.experience.rounds===0){showAI('SIN EXPERIENCIA PREVIA','Nexus empieza con un comportamiento básico. No conoce tus hábitos todavía y observará esta partida.','Primera partida de experiencia: esta ronda medirá sus primeras tácticas.');say('Primera partida: Nexus comienza sin conocer tu estilo.');}
+ else if(memory.experience.rounds===1){showAI('COPIAR PARTIDA ANTERIOR','Nexus reproducirá los movimientos que guardó en la primera partida.','Secuencia guardada: '+memory.timeline.length+' eventos.');say('Segunda partida: Nexus copiará lo que hiciste en la primera.');}
+ else{showAI('MODO ADAPTACIÓN','Nexus ya copió una partida y ahora usa sus resultados de experiencia para contrarrestar tu estilo.','Patrón detectado: '+dominantPattern()+'. Lección guardada: '+memory.experience.lesson);say('Tercera partida: Nexus adapta su estrategia según lo que le funcionó y lo que falló.');}
  playSound('start');lastTime=performance.now()
 };
 $('pauseBtn').onclick=()=>{if(!running&&!paused)return;paused=!paused;$('pauseBtn').textContent=paused?'Continuar':'Pausar';$('status').textContent=paused?'● EN PAUSA':'● COMBATE EN CURSO';say(paused?'Partida pausada.':'Partida reanudada.');lastTime=performance.now()};
