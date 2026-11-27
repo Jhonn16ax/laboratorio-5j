@@ -400,8 +400,10 @@ function finishRound(){
  const winner=player.hp>enemy.hp?'Atlas':enemy.hp>player.hp?'Nexus':'Empate';
  const report={match:memory.matches+1,winner,robot:player.label,playerHp:player.hp,enemyHp:enemy.hp,damageDealt:Math.max(0,MAX_HP-enemy.hp),damageReceived:Math.max(0,player.maxHp-player.hp),duration:Math.max(0,90-Math.max(0,roundTime)),shots:session.shots||0,jumps:session.jumps||0,melee:session.melee||0,blocks:session.blocks||0,actions:session.actions||0};
  memory.previousReport=memory.lastReport||null;memory.lastReport=report;memory.matches++;
- memory.stats=blankStats();Object.keys(blankStats()).forEach(k=>memory.stats[k]=session[k]||0);
- memory.timeline=(session.timeline||[]).concat([{t:Number((session.elapsed+.01).toFixed(2)),type:'state',state:{left:false,right:false,block:false}}]).slice(0,900);
+ Object.keys(blankStats()).forEach(k=>memory.stats[k]=(memory.stats[k]||0)+(session[k]||0));
+ const latestTimeline=(session.timeline||[]).concat([{t:Number((session.elapsed+.01).toFixed(2)),type:'state',state:{left:false,right:false,block:false}}]);
+ const hasUsefulInput=latestTimeline.some(event=>event.type==='tap'||(event.type==='state'&&event.state&&(event.state.left||event.state.right||event.state.block)));
+ if(hasUsefulInput)memory.timeline=latestTimeline.slice(-900);
  const stored=saveMemory();session=makeSession();
  $('pauseBtn').disabled=true;$('robotSelect').disabled=false;$('startBtn').disabled=false;$('startBtn').textContent='Siguiente partida';$('status').textContent='● RONDA TERMINADA';
  if(winner==='Atlas'){say('¡Victoria de '+player.label+'! Nexus guardó tus movimientos.');playSound('win')}
@@ -431,7 +433,7 @@ if(aiClock<=0){
 }
 const predictedEnemyX=enemy.x+enemy.vx*.22;
 const approachingHazard=HAZARDS.find(h=>predictedEnemyX+enemy.w>h.x-12&&predictedEnemyX<h.x+h.w+12);
-if(approachingHazard&&enemy.ground&&Math.abs(enemy.y+enemy.h-FLOOR)<3&&Math.abs(enemy.vx)>25){
+if(memory.matches!==1&&approachingHazard&&enemy.ground&&Math.abs(enemy.y+enemy.h-FLOOR)<3&&Math.abs(enemy.vx)>25){
  enemy.vy=-530;enemy.ground=false;playSound('jump');showAI('SALTAR ZONA ELÉCTRICA','Nexus detectó una zona peligrosa en su trayectoria y salta para evitarla.','Zona eléctrica: '+approachingHazard.x+'–'+(approachingHazard.x+approachingHazard.w)+' px.');
 }
 const oldEnemyX=enemy.x;enemy.x=Math.max(12,Math.min(ARENA_WIDTH-enemy.w-12,enemy.x+enemy.vx*dt));resolveCrateCollision(enemy,oldEnemyX);applyVerticalPhysics(enemy,dt);applyHazards(enemy);
