@@ -543,11 +543,6 @@ function executeLabCase(input,rememberBaseline=false){
  if(rememberBaseline&&r.valid)labBaseline={input:{...input},suggestion:r.suggestion,range:currentLabRange()};
  return r;
 }
-function renderSavedCases(){
- let saved;try{saved=JSON.parse(localStorage.getItem('robotArenaAI.lab5.cases')||'null')}catch(_){saved=null}
- const cases=Array.isArray(saved)&&saved.length===3?saved:LAB_CASES;
- $('labSavedRows').innerHTML=cases.map((t,i)=>'<tr><td>'+(i+1)+'</td><td>'+t.input.distance+' px · '+(t.input.playerAction==='quieto'?'quieto':'Atlas atacando')+' · energía '+t.input.enemyEnergy+'</td><td>'+t.expected+'</td></tr>').join('');
-}
 $('labStep1Btn').onclick=()=>{
  const r=executeLabCase(LAB_INPUT,true);
  $('labComparison').textContent='Prueba 1 inicial: con distancia 200 px, energía 70 y rango '+currentLabRange()+' px, la sugerencia fue '+r.suggestion+'. Guarda esta como referencia para la captura 1.';
@@ -581,11 +576,11 @@ $('labRepeatBtn').onclick=()=>{
  setLabStatus(match?'La prueba guardada se repitió y coincidió.':'La prueba guardada se repitió. La diferencia se explica por el cambio de la regla.');
 };
 $('labSaveBtn').onclick=()=>{
- try{localStorage.setItem('robotArenaAI.lab5.cases',JSON.stringify(LAB_CASES));renderSavedCases();setLabStatus('Se guardaron 3 entradas con sus sugerencias esperadas para Proyecto 3 en este navegador.')}
+ try{localStorage.setItem('robotArenaAI.lab5.cases',JSON.stringify(LAB_CASES));setLabStatus('Se guardaron 3 entradas con sus sugerencias esperadas para Proyecto 3 en este navegador.')}
  catch(_){setLabStatus('No se pudieron guardar los casos en este navegador. Puedes usar la tabla visible como referencia.')}
 };
 $('range').addEventListener('input',()=>{$('labCurrentRange').textContent=$('range').value+' px'});
-renderSavedCases();
+
 $('labCurrentRange').textContent=$('range').value+' px';
 updateSoundButton();renderMemoryTimeline();renderMatchHistory();
 
