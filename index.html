@@ -150,7 +150,17 @@
 (()=>{
 'use strict';
 const canvas=document.getElementById('game'),ctx=canvas.getContext('2d'),$=id=>document.getElementById(id),keys={};
+
 const ARENA_WIDTH=1200,FLOOR=408,MAX_HP=120,STORE_KEY='robotArenaAI.learning.v2';
+const ROBOT_CONFIGS={
+ atlas:{label:'ATLAS',speed:245,maxHp:120,shotDamage:10,meleeDamage:14,color:'#3ad8ff',accent:'#c5f7ff'},
+ volt:{label:'VOLT',speed:295,maxHp:105,shotDamage:9,meleeDamage:12,color:'#8d7bff',accent:'#ded8ff'},
+ titan:{label:'TITAN',speed:205,maxHp:145,shotDamage:8,meleeDamage:18,color:'#ff9c48',accent:'#ffe0ad'}
+};
+let selectedRobotKey='atlas';try{selectedRobotKey=localStorage.getItem('robotArenaAI.robot')||'atlas'}catch(_){}
+if(!ROBOT_CONFIGS[selectedRobotKey])selectedRobotKey='atlas';
+let soundEnabled=true;try{soundEnabled=localStorage.getItem('robotArenaAI.sound')!=='off'}catch(_){}
+
 const PLATFORMS=[
  {id:'stepL1',x:220,y:350,w:145,h:18,label:'GRADA 1'},
  {id:'stepL2',x:370,y:310,w:145,h:18,label:'GRADA 2'},
@@ -170,10 +180,10 @@ const CRATE_START=[
 ];
 let crates=CRATE_START.map(q=>({...q})),arenaClock=0;
 let running=false,paused=false,finished=false,lastTime=0,aiClock=0,roundTime=90,projectiles=[],particles=[],session=null,shotCooldown=0,playerMeleeCooldown=0,enemyShotCooldown=0,enemyMeleeCooldown=0,enemyCopyJumpCooldown=0;
-const player={x:145,y:FLOOR-78,w:58,h:78,hp:MAX_HP,en:100,vx:0,vy:0,face:1,ground:true,platformId:null,springLock:0,hazardClock:0,def:false,flash:0,attack:0};
+const player={...ROBOT_CONFIGS[selectedRobotKey],x:145,y:FLOOR-78,w:58,h:78,hp:ROBOT_CONFIGS[selectedRobotKey].maxHp,en:100,vx:0,vy:0,face:1,ground:true,platformId:null,springLock:0,hazardClock:0,def:false,flash:0,attack:0};
 const enemy={x:990,y:FLOOR-78,w:62,h:78,hp:MAX_HP,en:100,vx:0,vy:0,face:-1,ground:true,platformId:null,springLock:0,hazardClock:0,def:false,flash:0,attack:0};
 const blankStats=()=>({left:0,right:0,jumps:0,shots:0,melee:0,blocks:0,actions:0});
-function loadMemory(){try{const raw=localStorage.getItem(STORE_KEY);if(!raw)return {matches:0,stats:blankStats(),timeline:[]};const data=JSON.parse(raw);return {matches:Number(data.matches)||0,stats:{...blankStats(),...(data.stats||{})},timeline:Array.isArray(data.timeline)?data.timeline:[]}}catch(_){return {matches:0,stats:blankStats(),timeline:[]}}}
+function loadMemory(){try{const raw=localStorage.getItem(STORE_KEY);if(!raw)return {matches:0,stats:blankStats(),timeline:[],lastReport:null,previousReport:null};const data=JSON.parse(raw);return {matches:Number(data.matches)||0,stats:{...blankStats(),...(data.stats||{})},timeline:Array.isArray(data.timeline)?data.timeline:[],lastReport:data.lastReport||null,previousReport:data.previousReport||null}}catch(_){return {matches:0,stats:blankStats(),timeline:[],lastReport:null,previousReport:null}}}
 let memory=loadMemory();
 function saveMemory(){try{localStorage.setItem(STORE_KEY,JSON.stringify(memory));return true}catch(_){return false}}
 function makeSession(){return {...blankStats(),elapsed:0,sampleClock:0,lastInputSignature:'',timeline:[{t:0,type:'state',state:{left:false,right:false,block:false}}]}}
@@ -186,8 +196,32 @@ function totalStats(){const a=memory.stats,b=session||blankStats(),out={};Object
 function ratios(){const s=memory.stats,n=Math.max(1,s.actions);return {left:s.left/n,right:s.right/n,jump:s.jumps/n,shot:s.shots/n,melee:s.melee/n,block:s.blocks/n}}
 function level(){return Math.min(5,1+Math.floor(memory.matches/2))}
 function dominantPattern(){const r=ratios();if(!hasLearnedPattern()&&(session?.actions||0)<8)return 'Reuniendo datos de tus movimientos';const patterns=[['Saltas con frecuencia',r.jump],['Disparas con frecuencia',r.shot],['Prefieres el combate cercano',r.melee],['Te mueves más hacia la izquierda',r.left],['Te mueves más hacia la derecha',r.right]];patterns.sort((a,b)=>b[1]-a[1]);return patterns[0][1]>.28?patterns[0][0]:'Tu estilo todavía es variado'}
+
 function showAI(action,reason,observation){$('aiAction').textContent=action;$('aiReason').textContent=reason;$('aiObservation').textContent=observation}
-function refreshLearning(){const r=ratios(),s=totalStats();$('skillLevel').textContent='Nivel '+level();$('matchCount').textContent=memory.matches;$('movePct').textContent=Math.round((r.left+r.right)*100)+'%';$('jumpPct').textContent=Math.round(r.jump*100)+'%';$('shotPct').textContent=Math.round(r.shot*100)+'%';$('meleePct').textContent=Math.round(r.melee*100)+'%';$('moveMeter').style.width=Math.min(100,(r.left+r.right)*100)+'%';$('jumpMeter').style.width=Math.min(100,r.jump*100)+'%';$('shotMeter').style.width=Math.min(100,r.shot*100)+'%';$('meleeMeter').style.width=Math.min(100,r.melee*100)+'%';$('learnSummary').textContent=dominantPattern()+'. La secuencia guardada se reproducirá en la siguiente partida.';return s}
+function timelineLabel(event){
+ if(event.type==='tap')return event.action==='jump'?'Saltó':event.action==='shoot'?'Disparó':'Golpeó';
+ const s=event.state||{},parts=[];
+ if(s.left)parts.push('se movió a la izquierda');
+ if(s.right)parts.push('se movió a la derecha');
+ if(s.block)parts.push('se defendió');
+ return parts.length?parts.join(' y '):'se quedó quieto';
+}
+function renderMemoryTimeline(){
+ const list=$('memoryTimeline');if(!list)return;list.innerHTML='';
+ const events=(memory.timeline||[]).slice(-10);
+ if(!events.length){const li=document.createElement('li');li.textContent='Primero juega una partida para crear la memoria.';list.appendChild(li);return}
+ events.forEach(event=>{const li=document.createElement('li');li.textContent=timelineLabel(event)+' · '+Number(event.t||0).toFixed(1)+' s';list.appendChild(li)});
+}
+function renderMatchHistory(){
+ const body=$('matchHistory');if(!body)return;body.innerHTML='';
+ const reports=[memory.previousReport,memory.lastReport].filter(Boolean);
+ if(!reports.length){body.innerHTML='<tr><td colspan="4">Sin partidas registradas.</td></tr>';$('matchComparison').textContent='Completa dos partidas para comparar los resultados.';return}
+ reports.forEach(report=>{const tr=document.createElement('tr');[report.match?'#'+report.match:'Partida',report.winner||'—',String(Math.round(report.damageDealt||0)),String(Math.round(report.playerHp||0))].forEach(value=>{const td=document.createElement('td');td.textContent=value;tr.appendChild(td)});body.appendChild(tr)});
+ if(reports.length<2){$('matchComparison').textContent='Ya hay una partida guardada. Completa otra para comparar el daño y tu vida restante.';return}
+ const older=reports[0],newer=reports[1],delta=Math.round((newer.damageDealt||0)-(older.damageDealt||0));
+ $('matchComparison').textContent='Ronda '+older.match+': '+older.winner+'. Ronda '+newer.match+': '+newer.winner+'. El daño a Nexus '+(delta>0?'aumentó en '+delta:delta<0?'disminuyó en '+Math.abs(delta):'se mantuvo igual')+' puntos.';
+}
+function refreshLearning(){const r=ratios(),s=totalStats();$('skillLevel').textContent='Nivel '+level();$('matchCount').textContent=memory.matches;$('movePct').textContent=Math.round((r.left+r.right)*100)+'%';$('jumpPct').textContent=Math.round(r.jump*100)+'%';$('shotPct').textContent=Math.round(r.shot*100)+'%';$('meleePct').textContent=Math.round(r.melee*100)+'%';$('moveMeter').style.width=Math.min(100,(r.left+r.right)*100)+'%';$('jumpMeter').style.width=Math.min(100,r.jump*100)+'%';$('shotMeter').style.width=Math.min(100,r.shot*100)+'%';$('meleeMeter').style.width=Math.min(100,r.melee*100)+'%';$('learnSummary').textContent=dominantPattern()+'. La secuencia guardada se reproducirá en la siguiente partida.';renderMemoryTimeline();renderMatchHistory();return s}
 function updateHUD(){[['pHp',player.hp,MAX_HP],['pEn',player.en,100],['eHp',enemy.hp,MAX_HP],['eEn',enemy.en,100]].forEach(([id,v,max])=>$(id).style.width=Math.max(0,v/max*100)+'%');$('pHpText').textContent=Math.ceil(player.hp)+' / '+MAX_HP;$('pEnText').textContent=Math.ceil(player.en)+' / 100';$('eHpText').textContent=Math.ceil(enemy.hp)+' / '+MAX_HP;$('eEnText').textContent=Math.ceil(enemy.en)+' / 100'}
 function say(text){$('message').textContent=text}
 function resetRound(){Object.assign(player,{x:145,y:FLOOR-78,hp:MAX_HP,en:100,vx:0,vy:0,face:1,ground:true,platformId:null,springLock:0,hazardClock:0,def:false,flash:0,attack:0});Object.assign(enemy,{x:990,y:FLOOR-78,hp:MAX_HP,en:100,vx:0,vy:0,face:-1,ground:true,platformId:null,springLock:0,hazardClock:0,def:false,flash:0,attack:0});projectiles=[];particles=[];crates=CRATE_START.map(q=>({...q}));arenaClock=0;const lift=PLATFORMS.find(q=>q.id==='lift');lift.x=lift.baseX;lift.dx=0;PLATFORMS.forEach(q=>{if(q.moving)q.phase=0});session=makeSession();replayIndex=0;replayHeld={left:false,right:false,block:false};shotCooldown=0;playerMeleeCooldown=0;enemyShotCooldown=0;enemyMeleeCooldown=0;roundTime=90;running=false;paused=false;finished=false;aiClock=0;$('startBtn').disabled=false;$('pauseBtn').disabled=true;$('pauseBtn').textContent='Pausar';$('status').textContent='● LISTO PARA JUGAR';$('startBtn').textContent='Iniciar partida';$('rangeValue').textContent=$('range').value+' px';say('Pulsa «Iniciar partida» para comenzar.');showAI('ESPERANDO','Nexus analizará tu estilo mientras juegas.','Todavía no hay movimientos que analizar.');updateHUD();refreshLearning()}
