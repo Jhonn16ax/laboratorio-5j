@@ -13,8 +13,6 @@
 .side{display:flex;flex-direction:column;gap:14px}.section{padding:15px}.section h2{font-size:12px;color:var(--cyan);letter-spacing:1.2px;margin:0 0 11px}.decision{background:#091421;border:1px solid #24415a;border-radius:10px;padding:12px}.label{font-size:10px;color:#9db1ca;letter-spacing:1px;font-weight:800}.big{font-size:22px;font-weight:950;color:var(--green);margin:3px 0 6px}.decision p,.note{font-size:12px;color:#c4d5e8;line-height:1.5;margin:5px 0}.note{color:#9db1ca}.learn-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}.stat{background:#0a1422;border:1px solid #203650;border-radius:9px;padding:9px}.stat b{font-size:17px;color:#fff;display:block}.stat span{font-size:10px;color:#9db1ca}.meter{height:6px;background:#26384e;border-radius:9px;overflow:hidden;margin-top:5px}.meter i{display:block;height:100%;background:linear-gradient(90deg,#44cbe9,#8c9aff);width:0}.slider{width:100%;accent-color:var(--cyan)}.footer{font-size:11px;color:#8196b1;text-align:center;margin-top:16px}
 @media(max-width:820px){.layout{grid-template-columns:1fr}.tag{display:none}}@media(max-width:460px){.hud{grid-template-columns:1fr}.head h1{font-size:20px}.wrap{padding:14px 9px}}
 
-.lab-panel{margin-top:16px;padding:17px}.lab-panel h2{margin:0 0 7px;color:var(--cyan);font-size:14px;letter-spacing:1px}.lab-intro{color:#a9bdd3;font-size:12px;margin:0 0 15px;line-height:1.55}.fourparts{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin:12px 0 16px}.part{background:#091421;border:1px solid #24415a;border-radius:10px;padding:11px;min-height:102px}.part b{display:block;color:var(--cyan);font-size:11px;letter-spacing:.8px;margin-bottom:6px}.part span{font-size:12px;color:#c5d6e7;line-height:1.45}.lab-controls{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}.lab-controls button{font-size:12px}.lab-result{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px}.lab-cell{background:#091421;border:1px solid #24415a;border-radius:10px;padding:12px;min-height:84px}.lab-cell .label{margin-bottom:6px}.lab-cell p{font-size:12px;color:#d1deeb;margin:0;line-height:1.5}.lab-suggestion{font-size:20px!important;font-weight:900;color:var(--green)!important}.lab-warning{border-color:#8e493d;background:#2a171a}.lab-warning .lab-suggestion{color:#ffb18f!important}.lab-status{font-size:12px;color:#9db1ca;margin-top:9px;min-height:18px}.lab-table{width:100%;border-collapse:collapse;font-size:12px;margin-top:9px}.lab-table th,.lab-table td{text-align:left;border-bottom:1px solid #29415e;padding:8px 6px}.lab-table th{color:#9dbbd3}.qa-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:13px}.qa{background:#091421;border:1px solid #24415a;border-radius:10px;padding:12px}.qa h3{font-size:12px;color:var(--cyan);margin:0 0 7px}.qa p{font-size:12px;color:#c5d6e7;margin:0;line-height:1.55}
-@media(max-width:760px){.fourparts{grid-template-columns:1fr 1fr}.lab-result{grid-template-columns:1fr 1fr}}@media(max-width:470px){.fourparts,.lab-result,.qa-grid{grid-template-columns:1fr}}
 
 
 .robot-picker{display:flex;align-items:center;gap:7px;color:#b9cbe0;font-size:12px;font-weight:800}
@@ -101,43 +99,7 @@
 </aside>
 </main>
 
-<section class="panel lab-panel" aria-labelledby="labTitle">
- <h2 id="labTitle">LABORATORIO 5 · PANEL DE PRUEBAS</h2>
- <p class="lab-intro">Este panel sirve para documentar cómo decide el oponente de juego. La prueba controlada usa una entrada fija y la misma regla de Nexus; así puedes cambiar una sola condición, rechazar una jugada inválida y repetir un caso guardado. Las pruebas son independientes del combate en vivo.</p>
- <div class="fourparts">
-  <div class="part"><b>1 · ENTRADA</b><span id="labInput">Distancia: 200 px · Atlas: quieto · Energía de Nexus: 70/100.</span></div>
-  <div class="part"><b>2 · SUGERENCIA</b><span id="labSuggestion" class="lab-suggestion">Todavía sin ejecutar.</span></div>
-  <div class="part"><b>3 · POR QUÉ</b><span id="labWhy">Ejecuta la prueba válida para ver qué regla produjo la sugerencia.</span></div>
-  <div class="part"><b>4 · LÍMITE Y QUIÉN DECIDE</b><span id="labLimit">Nexus solo observa los datos incluidos en esta prueba; no conoce la intención del jugador. La persona que juega decide cómo actuar y puede ignorar la sugerencia.</span></div>
- </div>
- <div class="row" style="align-items:center"><b>Condición de la IA: rango de ataque</b><span class="cyan" id="labCurrentRange">230 px</span></div>
- <p class="lab-intro">La entrada fija de la prueba 1 es: distancia 200 px, Atlas quieto y energía de Nexus 70/100. El valor inicial de la regla es 230 px.</p>
- <div class="lab-controls">
-  <button id="labStep1Btn">Paso 1 · Ejecutar entrada válida</button>
-  <button id="labStep2Btn" class="alt">Paso 2 · Cambiar solo el rango a 180 px</button>
-  <button id="labRestoreBtn" class="alt">Restaurar rango a 230 px</button>
- </div>
- <div class="lab-controls">
-  <button id="labInvalidBtn" class="warn">Paso 3 · Probar jugada inválida</button>
-  <button id="labRepeatBtn" class="alt">Repetir prueba guardada</button>
-  <button id="labSaveBtn" class="alt">Guardar 3 pruebas para Proyecto 3</button>
- </div>
- <div class="lab-result">
-  <div class="lab-cell"><div class="label">COMPARACIÓN PASO 2</div><p id="labComparison">Primero ejecuta el paso 1. Después cambia únicamente el rango y compara la sugerencia.</p></div>
-  <div class="lab-cell"><div class="label">PASO 3 · ENTRADA INVÁLIDA</div><p id="labInvalidResult">Todavía no se ha probado una jugada inválida. La prueba intentará atacar con menos de 18 puntos de energía.</p></div>
-  <div class="lab-cell"><div class="label">PASO 3 · PRUEBA GUARDADA REPETIDA</div><p id="labRepeatResult">Ejecuta la repetición después de cambiar el rango para comparar la sugerencia esperada y la obtenida.</p></div>
- </div>
- <div class="lab-status" id="labStatus" aria-live="polite">Listo para ejecutar las pruebas.</div>
- <h2 style="margin-top:19px">PRUEBAS GUARDADAS PARA PROYECTO 3</h2>
- <p class="lab-intro">Guarda estos tres casos con su sugerencia esperada. La prueba 1 también se repetirá después de cambiar el rango.</p>
- <table class="lab-table"><thead><tr><th>Prueba</th><th>Entrada</th><th>Sugerencia esperada</th></tr></thead><tbody id="labSavedRows">
-  <tr><td>1</td><td>200 px · quieto · energía 70</td><td>ATACAR</td></tr>
-  <tr><td>2</td><td>300 px · quieto · energía 70</td><td>ACERCARSE</td></tr>
-  <tr><td>3</td><td>100 px · Atlas atacando · energía 60</td><td>DEFENDERSE</td></tr>
- </tbody></table>
 
- <p class="lab-intro" style="margin-top:12px"><b>Pruebas:</b> los pasos 1, 2 y 3 permiten comprobar una entrada válida, el cambio de una condición y el rechazo de una jugada inválida.</p>
-</section>
 
 
 <div class="result-overlay" id="resultOverlay" hidden>
@@ -514,85 +476,7 @@ $('resultCloseBtn').onclick=()=>{$('resultOverlay').hidden=true};
 $('range').oninput=()=>{$('rangeValue').textContent=$('range').value+' px';if(running)showAI('RECALCULANDO','Cambiaste el rango de ataque. Nexus usará la nueva condición.','Nuevo rango: '+$('range').value+' px.')};
 $('clearMemoryBtn').onclick=()=>{if(!confirm('¿Borrar toda la memoria de movimientos aprendida por Nexus en este navegador?'))return;memory={matches:0,stats:blankStats(),timeline:[],lastReport:null,previousReport:null,experience:blankExperience()};saveMemory();replayIndex=0;replayHeld={left:false,right:false,block:false};refreshLearning();showAI('MEMORIA REINICIADA','Nexus olvidó los patrones guardados.','Empezará a reconocer tu estilo desde cero.');say('Memoria aprendida borrada. La ronda actual no se modificó.')};
 
-const LAB_INPUT={distance:200,playerAction:'quieto',enemyEnergy:70};
-const LAB_CASES=[
- {name:'Prueba 1',input:{distance:200,playerAction:'quieto',enemyEnergy:70},expected:'ATACAR'},
- {name:'Prueba 2',input:{distance:300,playerAction:'quieto',enemyEnergy:70},expected:'ACERCARSE'},
- {name:'Prueba 3',input:{distance:100,playerAction:'atacando',enemyEnergy:60},expected:'DEFENDERSE'}
-];
-let labBaseline=null,labLast=null;
-function labDecision(input,range){
- const validAction=['quieto','atacando'].includes(input.playerAction);
- const numeric=Number.isFinite(input.distance)&&Number.isFinite(input.enemyEnergy);
- if(!numeric||input.distance<0||input.distance>900||input.enemyEnergy<0||input.enemyEnergy>100||!validAction||(input.requestedMove==='ATACAR'&&input.enemyEnergy<18))
-  return {valid:false,suggestion:null,reason:'Entrada inválida: revisa distancia, energía y acción. No hay sugerencia.'};
- if(input.playerAction==='atacando'&&input.distance<=145)
-  return {valid:true,suggestion:'DEFENDERSE',reason:'La regla detecta que Atlas está atacando y está a 145 px o menos.'};
- if(input.enemyEnergy<18)
-  return {valid:true,suggestion:'RECUPERAR ENERGÍA',reason:'Nexus tiene menos de 18 puntos, así que no puede atacar y debe recuperarse.'};
- if(input.distance>range)
-  return {valid:true,suggestion:'ACERCARSE',reason:'La distancia supera el rango de ataque configurado ('+range+' px).'};
- return {valid:true,suggestion:'ATACAR',reason:'Atlas está dentro del rango ('+input.distance+' ≤ '+range+' px) y Nexus tiene energía suficiente.'};
-}
-function labInputText(input){return 'Distancia: '+input.distance+' px · Atlas: '+input.playerAction+' · Energía de Nexus: '+input.enemyEnergy+'/100.'}
-function renderLab(result,input){
- $('labInput').textContent=labInputText(input);
- $('labSuggestion').textContent=result.valid?result.suggestion:'NO HAY SUGERENCIA';
- $('labWhy').textContent=result.reason;
- $('labLimit').textContent='Nexus solo considera distancia, acción y energía. No conoce la intención del jugador ni todo lo que ocurre fuera de esta entrada. La persona decide cómo jugar y puede ignorar la sugerencia.';
- $('labSuggestion').style.color=result.valid?'var(--green)':'#ffb18f';
-}
-function currentLabRange(){return Number($('range').value)}
-function setLabStatus(t){$('labStatus').textContent=t}
-function executeLabCase(input,rememberBaseline=false){
- const r=labDecision(input,currentLabRange());labLast={input:{...input},result:r,range:currentLabRange()};renderLab(r,input);
- if(rememberBaseline&&r.valid)labBaseline={input:{...input},suggestion:r.suggestion,range:currentLabRange()};
- return r;
-}
-function renderSavedCases(){
- let saved;try{saved=JSON.parse(localStorage.getItem('robotArenaAI.lab5.cases')||'null')}catch(_){saved=null}
- const cases=Array.isArray(saved)&&saved.length===3?saved:LAB_CASES;
- $('labSavedRows').innerHTML=cases.map((t,i)=>'<tr><td>'+(i+1)+'</td><td>'+t.input.distance+' px · '+(t.input.playerAction==='quieto'?'quieto':'Atlas atacando')+' · energía '+t.input.enemyEnergy+'</td><td>'+t.expected+'</td></tr>').join('');
-}
-$('labStep1Btn').onclick=()=>{
- const r=executeLabCase(LAB_INPUT,true);
- $('labComparison').textContent='Prueba 1 inicial: con distancia 200 px, energía 70 y rango '+currentLabRange()+' px, la sugerencia fue '+r.suggestion+'. Guarda esta como referencia para la captura 1.';
- $('labInvalidResult').textContent='La entrada inválida todavía no se ha probado.';
- setLabStatus('Paso 1 ejecutado. Captura esta pantalla como captura 1.');
-};
-$('labStep2Btn').onclick=()=>{
- if(!labBaseline){setLabStatus('Primero ejecuta el paso 1 para guardar la sugerencia inicial.');return}
- $('range').value='180';$('rangeValue').textContent='180 px';$('labCurrentRange').textContent='180 px';
- const r=executeLabCase(LAB_INPUT,false);
- $('labComparison').textContent='Antes: '+labBaseline.suggestion+' con rango '+labBaseline.range+' px. Ahora: '+r.suggestion+' con rango 180 px. La entrada se mantuvo igual (200 px, quieto, energía 70); solo cambió el rango. El cambio lo produjo la regla, no la entrada.';
- setLabStatus('Paso 2 ejecutado. Toma la captura 2 con la nueva sugerencia y la comparación.');
-};
-$('labRestoreBtn').onclick=()=>{$('range').value='230';$('rangeValue').textContent='230 px';$('labCurrentRange').textContent='230 px';setLabStatus('Rango restaurado a 230 px. La memoria aprendida de Nexus no se borró.')};
-$('labInvalidBtn').onclick=()=>{
- const invalid={distance:200,playerAction:'atacando',enemyEnergy:10,requestedMove:'ATACAR'};
- const rejected=labDecision(invalid,currentLabRange());
- renderLab(rejected,invalid);
- $('labInput').textContent='Jugada solicitada: ATACAR · Energía de Nexus: 10/100 · Costo requerido: 18.';
- $('labInvalidResult').textContent=rejected.valid?'ERROR: la aplicación aceptó una jugada que debía rechazar.':'AVISO: ataque rechazado porque 10 < 18. No se generó ninguna sugerencia.';
- $('labInvalidResult').parentElement.classList.toggle('lab-warning',!rejected.valid);
- setLabStatus(rejected.valid?'La prueba falló: revisar la validación.':'Paso 3: entrada inválida rechazada correctamente; no se produjo una sugerencia.');
-};
-$('labRepeatBtn').onclick=()=>{
- if(!labBaseline){setLabStatus('Primero ejecuta el paso 1 para guardar una prueba de referencia.');return}
- const expected=labBaseline.suggestion;
- const r=executeLabCase(labBaseline.input,false);
- const match=r.valid&&r.suggestion===expected;
- $('labRepeatResult').textContent='Esperada originalmente: '+expected+'. Obtenida con el rango actual ('+currentLabRange()+' px): '+(r.suggestion||'ninguna')+'. '+(match?'Coinciden.':'No coinciden porque cambió el rango de ataque en el paso 2; la nueva regla produce una sugerencia distinta.');
- $('labRepeatResult').parentElement.classList.toggle('lab-warning',!match);
- setLabStatus(match?'La prueba guardada se repitió y coincidió.':'La prueba guardada se repitió. La diferencia se explica por el cambio de la regla.');
-};
-$('labSaveBtn').onclick=()=>{
- try{localStorage.setItem('robotArenaAI.lab5.cases',JSON.stringify(LAB_CASES));renderSavedCases();setLabStatus('Se guardaron 3 entradas con sus sugerencias esperadas para Proyecto 3 en este navegador.')}
- catch(_){setLabStatus('No se pudieron guardar los casos en este navegador. Puedes usar la tabla visible como referencia.')}
-};
-$('range').addEventListener('input',()=>{$('labCurrentRange').textContent=$('range').value+' px'});
-renderSavedCases();
-$('labCurrentRange').textContent=$('range').value+' px';
+
 updateSoundButton();renderMemoryTimeline();renderMatchHistory();
 
 resetRound();refreshLearning();requestAnimationFrame(loop);
