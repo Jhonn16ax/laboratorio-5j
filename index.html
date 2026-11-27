@@ -50,7 +50,7 @@
  <div class="barhead"><b>ARENA DE COMBATE</b><span class="status" id="status">● LISTO PARA JUGAR</span></div>
  <div class="arena"><canvas id="game" width="1200" height="500" aria-label="Arena de combate lateral"></canvas></div>
  <div class="hud">
-  <div class="fighter"><div class="row"><b>ATLAS · JUGADOR</b><span id="pHpText">120 / 120</span></div><div class="track"><div class="fill" id="pHp" style="width:100%"></div></div><div class="row"><span>ENERGÍA</span><span id="pEnText">100 / 100</span></div><div class="track"><div class="fill energy" id="pEn" style="width:100%"></div></div></div>
+  <div class="fighter"><div class="row"><b><span id="playerRobotName">ATLAS</span> · JUGADOR</b><span id="pHpText">120 / 120</span></div><div class="track"><div class="fill" id="pHp" style="width:100%"></div></div><div class="row"><span>ENERGÍA</span><span id="pEnText">100 / 100</span></div><div class="track"><div class="fill energy" id="pEn" style="width:100%"></div></div></div>
   <div class="fighter"><div class="row"><b>NEXUS · IA</b><span id="eHpText">120 / 120</span></div><div class="track"><div class="fill" id="eHp" style="width:100%"></div></div><div class="row"><span>ENERGÍA</span><span id="eEnText">100 / 100</span></div><div class="track"><div class="fill energy" id="eEn" style="width:100%"></div></div></div>
  </div>
  <div class="keys"><span class="key">A / D · MOVER</span><span class="key">W · SALTAR Y SUBIR GRADAS</span><span class="key">J · GOLPE</span><span class="key">L / ESPACIO · DISPARAR</span><span class="key">K · DEFENDER</span></div>
@@ -227,7 +227,7 @@ function renderMatchHistory(){
  const body=$('matchHistory');if(!body)return;body.innerHTML='';
  const reports=[memory.previousReport,memory.lastReport].filter(Boolean);
  if(!reports.length){body.innerHTML='<tr><td colspan="4">Sin partidas registradas.</td></tr>';$('matchComparison').textContent='Completa dos partidas para comparar los resultados.';return}
- reports.forEach(report=>{const tr=document.createElement('tr');[report.match?'#'+report.match:'Partida',report.winner||'—',String(Math.round(report.damageDealt||0)),String(Math.round(report.playerHp||0))].forEach(value=>{const td=document.createElement('td');td.textContent=value;tr.appendChild(td)});body.appendChild(tr)});
+ reports.forEach(report=>{const tr=document.createElement('tr');[report.match?'#'+report.match:'Partida',report.winner==='Atlas'?report.robot:(report.winner||'—'),String(Math.round(report.damageDealt||0)),String(Math.round(report.playerHp||0))].forEach(value=>{const td=document.createElement('td');td.textContent=value;tr.appendChild(td)});body.appendChild(tr)});
  if(reports.length<2){$('matchComparison').textContent='Ya hay una partida guardada. Completa otra para comparar el daño y tu vida restante.';return}
  const older=reports[0],newer=reports[1],delta=Math.round((newer.damageDealt||0)-(older.damageDealt||0));
  $('matchComparison').textContent='Ronda '+older.match+': '+older.winner+'. Ronda '+newer.match+': '+newer.winner+'. El daño a Nexus '+(delta>0?'aumentó en '+delta:delta<0?'disminuyó en '+Math.abs(delta):'se mantuvo igual')+' puntos.';
@@ -239,7 +239,7 @@ function applyRobotSelection(key){
  selectedRobotKey=ROBOT_CONFIGS[key]?key:'atlas';
  Object.assign(player,ROBOT_CONFIGS[selectedRobotKey],{hp:ROBOT_CONFIGS[selectedRobotKey].maxHp,en:100});
  try{localStorage.setItem('robotArenaAI.robot',selectedRobotKey)}catch(_){}
- $('robotSelect').value=selectedRobotKey;updateHUD();
+ $('robotSelect').value=selectedRobotKey;$('playerRobotName').textContent=ROBOT_CONFIGS[selectedRobotKey].label;updateHUD();
 }
 let audioContext=null;
 function playSound(kind){
@@ -385,11 +385,11 @@ const startX=from.x+(from.face>0?from.w+4:-12),startY=from.y+from.h*.43;
 let aimY=to.y+to.h*.45;
 if(!isPlayer){const flight=Math.min(.5,Math.abs(to.x-from.x)/620);const bias=ratios();let lead=to.vx*flight;if(bias.right>bias.left+.12)lead+=24;if(bias.left>bias.right+.12)lead-=24;aimY=to.y+to.h*.45+to.vy*flight*.38;if(bias.jump>.22&&to.y<FLOOR-to.h-8)aimY=FLOOR-28;aimY=Math.max(75,Math.min(FLOOR-15,aimY))}
 const dx=(to.x+to.w/2)-startX,dy=aimY-startY,dir=Math.sign(dx)||from.face,speed=isPlayer?610:560+(level()-1)*22,angle=Math.atan2(dy,Math.abs(dx));projectiles.push({x:startX,y:startY,vx:dir*Math.cos(angle)*speed,vy:Math.sin(angle)*speed,owner:isPlayer?'player':'enemy',life:1.5,damage:isPlayer?player.shotDamage:Math.min(13,9+(level()-1)),color:isPlayer?'#57edff':'#ff6379',r:7});if(isPlayer)say('¡Disparo de plasma!');return true}
-function melee(from,to,isPlayer){if(from.en<12){if(isPlayer)say('Necesitas energía para el golpe.');return}if(isPlayer&&playerMeleeCooldown>0){say('Espera a que termine tu golpe.');return}if(!isPlayer&&enemyMeleeCooldown>0)return;from.en-=12;if(isPlayer){playerMeleeCooldown=.5;record('melee')}else enemyMeleeCooldown=.72;from.attack=.22;playSound('melee');const dist=Math.abs((from.x+from.w/2)-(to.x+to.w/2));if(dist<112&&Math.abs((from.y+from.h/2)-(to.y+to.h/2))<82){const damage=isPlayer?player.meleeDamage:Math.min(17,11+(level()-1));to.hp=Math.max(0,to.hp-(to.def?damage*.22:damage));to.flash=.18;burst(to.x+to.w/2,to.y+to.h*.43,'#ffe28a');if(isPlayer)say(to.def?'Nexus redujo el daño con su defensa.':'¡Golpe conectado!')}else if(isPlayer)say('Estás demasiado lejos para golpear.')}
+function melee(from,to,isPlayer){if(from.en<12){if(isPlayer)say('Necesitas energía para el golpe.');return}if(isPlayer&&playerMeleeCooldown>0){say('Espera a que termine tu golpe.');return}if(!isPlayer&&enemyMeleeCooldown>0)return;from.en-=12;if(isPlayer){playerMeleeCooldown=.5;record('melee')}else enemyMeleeCooldown=.72;from.attack=.22;playSound('melee');const dist=Math.abs((from.x+from.w/2)-(to.x+to.w/2));if(dist<112&&Math.abs((from.y+from.h/2)-(to.y+to.h/2))<82){const damage=isPlayer?player.meleeDamage:Math.min(17,11+(level()-1));to.hp=Math.max(0,to.hp-(to.def?damage*.22:damage));to.flash=.18;burst(to.x+to.w/2,to.y+to.h*.43,'#ffe28a');playSound('hit');if(isPlayer)say(to.def?'Nexus redujo el daño con su defensa.':'¡Golpe conectado!')}else if(isPlayer)say('Estás demasiado lejos para golpear.')}
 function showResults(report){
  $('resultTitle').textContent=report.winner==='Atlas'?'¡VICTORIA DE '+player.label+'!':report.winner==='Nexus'?'NEXUS GANÓ':'EMPATE';
  $('resultLead').textContent='Ronda '+report.match+' · Robot elegido: '+report.robot+'.';
- const cards=[['Tu vida restante',Math.round(report.playerHp)],['Vida de Nexus',Math.round(report.enemyHp)],['Daño causado',Math.round(report.damageDealt)],['Disparos',report.shots],['Saltos',report.jumps],['Golpes',report.melee]];
+ const cards=[['Tu vida restante',Math.round(report.playerHp)],['Vida de Nexus',Math.round(report.enemyHp)],['Daño causado',Math.round(report.damageDealt)],['Disparos',report.shots],['Saltos',report.jumps],['Golpes',report.melee],['Defensas',report.blocks],['Duración',Math.round(report.duration)+' s']];
  $('resultStats').innerHTML=cards.map(([label,value])=>'<div class="result-stat"><b>'+value+'</b><span>'+label+'</span></div>').join('');
  const previous=memory.previousReport;
  $('resultCompare').textContent=previous?'Comparación con la ronda '+previous.match+': daño anterior '+Math.round(previous.damageDealt)+'; daño actual '+Math.round(report.damageDealt)+'. '+(report.damageDealt>previous.damageDealt?'Mejoraste el daño causado.':report.damageDealt<previous.damageDealt?'El daño causado fue menor.':'El daño se mantuvo igual.'):'Esta fue tu primera ronda registrada. En la siguiente podrás comparar los resultados.';
@@ -432,7 +432,7 @@ if(aiClock<=0){
 const predictedEnemyX=enemy.x+enemy.vx*.22;
 const approachingHazard=HAZARDS.find(h=>predictedEnemyX+enemy.w>h.x-12&&predictedEnemyX<h.x+h.w+12);
 if(approachingHazard&&enemy.ground&&Math.abs(enemy.y+enemy.h-FLOOR)<3&&Math.abs(enemy.vx)>25){
- enemy.vy=-530;enemy.ground=false;showAI('SALTAR ZONA ELÉCTRICA','Nexus detectó una zona peligrosa en su trayectoria y salta para evitarla.','Zona eléctrica: '+approachingHazard.x+'–'+(approachingHazard.x+approachingHazard.w)+' px.');
+ enemy.vy=-530;enemy.ground=false;playSound('jump');showAI('SALTAR ZONA ELÉCTRICA','Nexus detectó una zona peligrosa en su trayectoria y salta para evitarla.','Zona eléctrica: '+approachingHazard.x+'–'+(approachingHazard.x+approachingHazard.w)+' px.');
 }
 const oldEnemyX=enemy.x;enemy.x=Math.max(12,Math.min(ARENA_WIDTH-enemy.w-12,enemy.x+enemy.vx*dt));resolveCrateCollision(enemy,oldEnemyX);applyVerticalPhysics(enemy,dt);applyHazards(enemy);
 projectiles.forEach(b=>{
@@ -471,7 +471,7 @@ $('startBtn').onclick=()=>{
 $('pauseBtn').onclick=()=>{if(!running&&!paused)return;paused=!paused;$('pauseBtn').textContent=paused?'Continuar':'Pausar';$('status').textContent=paused?'● EN PAUSA':'● COMBATE EN CURSO';say(paused?'Partida pausada.':'Partida reanudada.');lastTime=performance.now()};
 $('resetBtn').onclick=()=>{resetRound();draw()};
 $('robotSelect').value=selectedRobotKey;applyRobotSelection(selectedRobotKey);
-$('robotSelect').onchange=()=>{if(running)return;applyRobotSelection($('robotSelect').value);resetRound();say('Robot seleccionado: '+player.label+'. Sus características se actualizaron.')};
+$('robotSelect').onchange=()=>{if(running)return;applyRobotSelection($('robotSelect').value);resetRound();playSound('select');say('Robot seleccionado: '+player.label+'. Sus características se actualizaron.')};
 $('soundBtn').onclick=()=>{soundEnabled=!soundEnabled;try{localStorage.setItem('robotArenaAI.sound',soundEnabled?'on':'off')}catch(_){}updateSoundButton();if(soundEnabled)playSound('select')};
 $('resultNextBtn').onclick=()=>{$('resultOverlay').hidden=true;$('startBtn').click()};
 $('resultCloseBtn').onclick=()=>{$('resultOverlay').hidden=true};
