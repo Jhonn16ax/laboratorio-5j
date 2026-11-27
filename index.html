@@ -260,7 +260,7 @@ function playSound(kind){
  }catch(_){}
 }
 function updateSoundButton(){$('soundBtn').textContent=soundEnabled?'🔊 Sonido activado':'🔇 Sonido desactivado'}
-function resetRound(){Object.assign(player,{x:145,y:FLOOR-78,hp:player.maxHp,en:100,vx:0,vy:0,face:1,ground:true,platformId:null,springLock:0,hazardClock:0,def:false,flash:0,attack:0});Object.assign(enemy,{x:990,y:FLOOR-78,hp:MAX_HP,en:100,vx:0,vy:0,face:-1,ground:true,platformId:null,springLock:0,hazardClock:0,def:false,flash:0,attack:0});projectiles=[];particles=[];crates=CRATE_START.map(q=>({...q}));arenaClock=0;const lift=PLATFORMS.find(q=>q.id==='lift');lift.x=lift.baseX;lift.dx=0;PLATFORMS.forEach(q=>{if(q.moving)q.phase=0});session=makeSession();replayIndex=0;replayHeld={left:false,right:false,block:false};shotCooldown=0;playerMeleeCooldown=0;enemyShotCooldown=0;enemyMeleeCooldown=0;roundTime=90;running=false;paused=false;finished=false;aiClock=0;$('startBtn').disabled=false;$('pauseBtn').disabled=true;$('pauseBtn').textContent='Pausar';$('status').textContent='● LISTO PARA JUGAR';$('startBtn').textContent='Iniciar partida';$('rangeValue').textContent=$('range').value+' px';say('Pulsa «Iniciar partida» para comenzar.');showAI('ESPERANDO','Nexus analizará tu estilo mientras juegas.','Todavía no hay movimientos que analizar.');updateHUD();refreshLearning()}
+function resetRound(){$('resultOverlay').hidden=true;$('robotSelect').disabled=false;Object.assign(player,{x:145,y:FLOOR-78,hp:player.maxHp,en:100,vx:0,vy:0,face:1,ground:true,platformId:null,springLock:0,hazardClock:0,def:false,flash:0,attack:0});Object.assign(enemy,{x:990,y:FLOOR-78,hp:MAX_HP,en:100,vx:0,vy:0,face:-1,ground:true,platformId:null,springLock:0,hazardClock:0,def:false,flash:0,attack:0});projectiles=[];particles=[];crates=CRATE_START.map(q=>({...q}));arenaClock=0;const lift=PLATFORMS.find(q=>q.id==='lift');lift.x=lift.baseX;lift.dx=0;PLATFORMS.forEach(q=>{if(q.moving)q.phase=0});session=makeSession();replayIndex=0;replayHeld={left:false,right:false,block:false};shotCooldown=0;playerMeleeCooldown=0;enemyShotCooldown=0;enemyMeleeCooldown=0;roundTime=90;running=false;paused=false;finished=false;aiClock=0;$('startBtn').disabled=false;$('pauseBtn').disabled=true;$('pauseBtn').textContent='Pausar';$('status').textContent='● LISTO PARA JUGAR';$('startBtn').textContent='Iniciar partida';$('rangeValue').textContent=$('range').value+' px';say('Pulsa «Iniciar partida» para comenzar.');showAI('ESPERANDO','Nexus analizará tu estilo mientras juegas.','Todavía no hay movimientos que analizar.');updateHUD();refreshLearning()}
 function updateArena(dt){
  arenaClock+=dt;
  for(const platform of PLATFORMS){
@@ -461,11 +461,22 @@ if(paused){ctx.fillStyle='#06101dcc';ctx.fillRect(0,0,ARENA_WIDTH,500);ctx.textA
 function loop(t){const dt=Math.min(.033,(t-lastTime)/1000||0);lastTime=t;update(dt);draw();requestAnimationFrame(loop)}
 window.addEventListener('keydown',ev=>{const k=ev.code==='Space'?'space':(ev.key.length===1?ev.key.toLowerCase():ev.key);if(['ArrowLeft','ArrowRight','ArrowUp'].includes(ev.key)||ev.code==='Space')ev.preventDefault();if(!keys[k]){if(k==='a'||k==='ArrowLeft')record('left');if(k==='d'||k==='ArrowRight')record('right')}keys[k]=true});
 window.addEventListener('keyup',ev=>{const k=ev.code==='Space'?'space':(ev.key.length===1?ev.key.toLowerCase():ev.key);keys[k]=false});
-$('startBtn').onclick=()=>{if(finished)resetRound();running=true;paused=false;$('startBtn').disabled=true;$('pauseBtn').disabled=false;$('status').textContent='● COMBATE EN CURSO';if(!hasLearnedPattern()){showAI('SIN EXPERIENCIA PREVIA','Nexus todavía no tiene una secuencia de movimientos guardada. En esta partida observará y aprenderá tus acciones.','Primera partida de aprendizaje: no hay movimientos anteriores que copiar.');say('Nexus empieza sin conocer tu estilo. Esta partida servirá para aprender.');}else{showAI('MEMORIA ANTERIOR CARGADA','Nexus tiene una secuencia de la partida anterior y la reproducirá durante este combate.','Movimientos guardados: '+memory.timeline.length+'. Partidas completadas: '+memory.matches+'.');say('Nexus cargó y copiará tus movimientos de la partida anterior.');}lastTime=performance.now()};
+$('startBtn').onclick=()=>{
+ if(finished)resetRound();$('resultOverlay').hidden=true;running=true;paused=false;$('startBtn').disabled=true;$('pauseBtn').disabled=false;$('robotSelect').disabled=true;$('status').textContent='● COMBATE EN CURSO';
+ if(!hasLearnedPattern()){showAI('SIN EXPERIENCIA PREVIA','Nexus empieza con un comportamiento básico. No conoce tus hábitos todavía y observará esta partida.','Primera partida: no hay movimientos guardados que pueda copiar.');say('Primera partida: Nexus comienza sin conocer tu estilo.');}
+ else if(memory.matches===1){showAI('COPIAR PARTIDA ANTERIOR','Nexus reproducirá los movimientos que guardó en la primera partida.','Secuencia guardada: '+memory.timeline.length+' eventos.');say('Segunda partida: Nexus copiará lo que hiciste en la primera.');}
+ else{showAI('MODO ADAPTACIÓN','Nexus ya copió una partida y ahora usa los patrones aprendidos para contrarrestar tu estilo.','Patrón detectado: '+dominantPattern()+'.');say('Tercera partida: Nexus adapta su estrategia a tu estilo.');}
+ playSound('start');lastTime=performance.now()
+};
 $('pauseBtn').onclick=()=>{if(!running&&!paused)return;paused=!paused;$('pauseBtn').textContent=paused?'Continuar':'Pausar';$('status').textContent=paused?'● EN PAUSA':'● COMBATE EN CURSO';say(paused?'Partida pausada.':'Partida reanudada.');lastTime=performance.now()};
 $('resetBtn').onclick=()=>{resetRound();draw()};
+$('robotSelect').value=selectedRobotKey;applyRobotSelection(selectedRobotKey);
+$('robotSelect').onchange=()=>{if(running)return;applyRobotSelection($('robotSelect').value);resetRound();say('Robot seleccionado: '+player.label+'. Sus características se actualizaron.')};
+$('soundBtn').onclick=()=>{soundEnabled=!soundEnabled;try{localStorage.setItem('robotArenaAI.sound',soundEnabled?'on':'off')}catch(_){}updateSoundButton();if(soundEnabled)playSound('select')};
+$('resultNextBtn').onclick=()=>{$('resultOverlay').hidden=true;$('startBtn').click()};
+$('resultCloseBtn').onclick=()=>{$('resultOverlay').hidden=true};
 $('range').oninput=()=>{$('rangeValue').textContent=$('range').value+' px';if(running)showAI('RECALCULANDO','Cambiaste el rango de ataque. Nexus usará la nueva condición.','Nuevo rango: '+$('range').value+' px.')};
-$('clearMemoryBtn').onclick=()=>{if(!confirm('¿Borrar toda la memoria de movimientos aprendida por Nexus en este navegador?'))return;memory={matches:0,stats:blankStats(),timeline:[]};saveMemory();replayIndex=0;replayHeld={left:false,right:false,block:false};refreshLearning();showAI('MEMORIA REINICIADA','Nexus olvidó los patrones guardados.','Empezará a reconocer tu estilo desde cero.');say('Memoria aprendida borrada. La ronda actual no se modificó.')};
+$('clearMemoryBtn').onclick=()=>{if(!confirm('¿Borrar toda la memoria de movimientos aprendida por Nexus en este navegador?'))return;memory={matches:0,stats:blankStats(),timeline:[],lastReport:null,previousReport:null};saveMemory();replayIndex=0;replayHeld={left:false,right:false,block:false};refreshLearning();showAI('MEMORIA REINICIADA','Nexus olvidó los patrones guardados.','Empezará a reconocer tu estilo desde cero.');say('Memoria aprendida borrada. La ronda actual no se modificó.')};
 
 const LAB_INPUT={distance:200,playerAction:'quieto',enemyEnergy:70};
 const LAB_CASES=[
@@ -546,6 +557,7 @@ $('labSaveBtn').onclick=()=>{
 $('range').addEventListener('input',()=>{$('labCurrentRange').textContent=$('range').value+' px'});
 renderSavedCases();
 $('labCurrentRange').textContent=$('range').value+' px';
+updateSoundButton();renderMemoryTimeline();renderMatchHistory();
 
 resetRound();refreshLearning();requestAnimationFrame(loop);
 })();
